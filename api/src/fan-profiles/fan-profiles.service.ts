@@ -8,6 +8,7 @@ import { City, Country, FanProfile, Prisma } from '@prisma/client';
 import { PrismaService } from '../database/prisma.service';
 import { CreateFanProfileDto } from './dto/create-fan-profile.dto';
 import { UpdateFanProfileDto } from './dto/update-fan-profile.dto';
+import { FindFanProfilesQueryDto } from './dto/find-fan-profiles-query.dto';
 
 type FanProfileWithLocation = FanProfile & { city: City & { country: Country } };
 
@@ -45,6 +46,20 @@ export class FanProfilesService {
     })) as FanProfileWithLocation;
 
     return toFanProfileResponse(fanProfile);
+  }
+
+  async findAll(query: FindFanProfilesQueryDto) {
+    const where: Prisma.FanProfileWhereInput = {};
+    if (query.onMap !== undefined) {
+      where.showOnMap = query.onMap === 'true';
+    }
+
+    const fanProfiles = (await this.prisma.fanProfile.findMany({
+      where,
+      include: { city: { include: { country: true } } },
+    })) as FanProfileWithLocation[];
+
+    return fanProfiles.map(toFanProfileResponse);
   }
 
   async findOne(id: string) {

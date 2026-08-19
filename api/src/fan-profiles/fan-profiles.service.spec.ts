@@ -12,7 +12,11 @@ describe('FanProfilesService', () => {
   let prisma: {
     city: { findUnique: jest.Mock };
     user: { findUnique: jest.Mock };
-    fanProfile: { findUnique: jest.Mock; update: jest.Mock };
+    fanProfile: {
+      findUnique: jest.Mock;
+      findMany: jest.Mock;
+      update: jest.Mock;
+    };
     $transaction: jest.Mock;
   };
   let tx: {
@@ -44,6 +48,22 @@ describe('FanProfilesService', () => {
     },
   };
 
+  const secondFanProfile = {
+    id: 'profile-2',
+    userId: 'user-2',
+    cityId: 'city-2',
+    displayName: 'Second Fan',
+    showOnMap: true,
+    createdAt: new Date('2026-01-02T00:00:00.000Z'),
+    updatedAt: new Date('2026-01-02T00:00:00.000Z'),
+    city: {
+      id: 'city-2',
+      name: 'Cordoba',
+      countryId: 'country-1',
+      country: { id: 'country-1', name: 'Argentina', code: 'AR' },
+    },
+  };
+
   beforeEach(async () => {
     tx = {
       user: { create: jest.fn().mockResolvedValue(createdUser) },
@@ -55,6 +75,9 @@ describe('FanProfilesService', () => {
       user: { findUnique: jest.fn().mockResolvedValue(null) },
       fanProfile: {
         findUnique: jest.fn().mockResolvedValue(createdFanProfile),
+        findMany: jest
+          .fn()
+          .mockResolvedValue([createdFanProfile, secondFanProfile]),
         update: jest.fn().mockResolvedValue(createdFanProfile),
       },
       $transaction: jest.fn().mockImplementation((callback) => callback(tx)),
@@ -291,6 +314,81 @@ describe('FanProfilesService', () => {
       });
       expect(result).not.toHaveProperty('userId');
       expect(result).not.toHaveProperty('email');
+    });
+  });
+
+  describe('findAll', () => {
+    // Sin filtro: devuelve todos los perfiles.
+    it('returns all fan profiles when no filter is provided', async () => {
+      const result = await service.findAll({});
+
+      expect(prisma.fanProfile.findMany).toHaveBeenCalledWith({
+        where: {},
+        include: { city: { include: { country: true } } },
+      });
+      expect(result).toHaveLength(2);
+    });
+
+    // onMap=true: filtra showOnMap=true.
+    it('filters by showOnMap=true when onMap is "true"', async () => {
+      await service.findAll({ onMap: 'true' });
+
+      expect(prisma.fanProfile.findMany).toHaveBeenCalledWith({
+        where: { showOnMap: true },
+        include: { city: { include: { country: true } } },
+      });
+    });
+
+    // onMap=false: filtra showOnMap=false.
+    it('filters by showOnMap=false when onMap is "false"', async () => {
+      await service.findAll({ onMap: 'false' });
+
+      expect(prisma.fanProfile.findMany).toHaveBeenCalledWith({
+        where: { showOnMap: false },
+        include: { city: { include: { country: true } } },
+      });
+    });
+
+    // Mapea correctamente city/country para cada perfil.
+    it('maps city and country correctly for each profile', async () => {
+      const result = await service.findAll({});
+
+      expect(result).toEqual([
+        {
+          id: createdFanProfile.id,
+          displayName: createdFanProfile.displayName,
+          showOnMap: createdFanProfile.showOnMap,
+          createdAt: createdFanProfile.createdAt,
+          updatedAt: createdFanProfile.updatedAt,
+          city: {
+            id: city.id,
+            name: city.name,
+            country: { id: 'country-1', name: 'Argentina', code: 'AR' },
+          },
+        },
+        {
+          id: secondFanProfile.id,
+          displayName: secondFanProfile.displayName,
+          showOnMap: secondFanProfile.showOnMap,
+          createdAt: secondFanProfile.createdAt,
+          updatedAt: secondFanProfile.updatedAt,
+          city: {
+            id: secondFanProfile.city.id,
+            name: secondFanProfile.city.name,
+            country: { id: 'country-1', name: 'Argentina', code: 'AR' },
+          },
+        },
+      ]);
+    });
+
+    // Nunca expone email ni userId.
+    it('never exposes email or userId', async () => {
+      const result = await service.findAll({});
+
+      result.forEach((profile) => {
+        expect(profile).not.toHaveProperty('email');
+        expect(profile).not.toHaveProperty('userId');
+      });
     });
   });
 });

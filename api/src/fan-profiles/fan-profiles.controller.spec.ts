@@ -4,10 +4,20 @@ import { FanProfilesService } from './fan-profiles.service';
 
 describe('FanProfilesController', () => {
   let controller: FanProfilesController;
-  let service: { create: jest.Mock; findOne: jest.Mock; update: jest.Mock };
+  let service: {
+    create: jest.Mock;
+    findOne: jest.Mock;
+    findAll: jest.Mock;
+    update: jest.Mock;
+  };
 
   beforeEach(async () => {
-    service = { create: jest.fn(), findOne: jest.fn(), update: jest.fn() };
+    service = {
+      create: jest.fn(),
+      findOne: jest.fn(),
+      findAll: jest.fn(),
+      update: jest.fn(),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       controllers: [FanProfilesController],
@@ -52,6 +62,25 @@ describe('FanProfilesController', () => {
 
     expect(service.findOne).toHaveBeenCalledWith('profile-1');
     expect(result).toBe(found);
+  });
+
+  // Case: listing fan profiles delegates to the service with the query and returns its result.
+  it('lists fan profiles via the service', async () => {
+    const query = { onMap: 'true' };
+    const list = [
+      {
+        id: 'profile-1',
+        displayName: 'Fan Name',
+        showOnMap: true,
+        city: { id: 'city-1', name: 'Buenos Aires', country: {} },
+      },
+    ];
+    service.findAll.mockResolvedValue(list);
+
+    const result = await controller.findAll(query);
+
+    expect(service.findAll).toHaveBeenCalledWith(query);
+    expect(result).toBe(list);
   });
 
   // Case: updating a profile delegates to the service and returns its result.

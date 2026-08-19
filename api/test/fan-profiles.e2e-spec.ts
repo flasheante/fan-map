@@ -229,6 +229,111 @@ describe('FanProfiles (e2e)', () => {
     });
   });
 
+  describe('GET /fan-profiles', () => {
+    async function createProfile(label: string, showOnMap: boolean) {
+      const email = uniqueEmail(label);
+      const response = await request(app.getHttpServer())
+        .post('/fan-profiles')
+        .send({ email, displayName: `${label} Fan`, cityId, showOnMap })
+        .expect(201);
+      return response.body as { id: string };
+    }
+
+    // Caso: sin filtro devuelve todos (incluye los visibles y no visibles).
+    it('returns all fan profiles when onMap is not provided', async () => {
+      const onMapProfile = await createProfile('list-all-on', true);
+      const offMapProfile = await createProfile('list-all-off', false);
+
+      const response = await request(app.getHttpServer())
+        .get('/fan-profiles')
+        .expect(200);
+
+      const ids: string[] = response.body.map(
+        (profile: { id: string }) => profile.id,
+      );
+      expect(ids).toEqual(expect.arrayContaining([
+        onMapProfile.id,
+        offMapProfile.id,
+      ]));
+    });
+
+    // Caso: onMap=true devuelve solamente los visibles en el mapa.
+    it('returns only fan profiles with showOnMap=true when onMap=true', async () => {
+      const onMapProfile = await createProfile('list-true-on', true);
+      const offMapProfile = await createProfile('list-true-off', false);
+
+      const response = await request(app.getHttpServer())
+        .get('/fan-profiles?onMap=true')
+        .expect(200);
+
+      const ids: string[] = response.body.map(
+        (profile: { id: string }) => profile.id,
+      );
+      expect(ids).toContain(onMapProfile.id);
+      expect(ids).not.toContain(offMapProfile.id);
+      response.body.forEach((profile: { showOnMap: boolean }) => {
+        expect(profile.showOnMap).toBe(true);
+      });
+    });
+
+    // Caso: onMap=false devuelve solamente los no visibles en el mapa.
+    it('returns only fan profiles with showOnMap=false when onMap=false', async () => {
+      const onMapProfile = await createProfile('list-false-on', true);
+      const offMapProfile = await createProfile('list-false-off', false);
+
+      const response = await request(app.getHttpServer())
+        .get('/fan-profiles?onMap=false')
+        .expect(200);
+
+      const ids: string[] = response.body.map(
+        (profile: { id: string }) => profile.id,
+      );
+      expect(ids).toContain(offMapProfile.id);
+      expect(ids).not.toContain(onMapProfile.id);
+      response.body.forEach((profile: { showOnMap: boolean }) => {
+        expect(profile.showOnMap).toBe(false);
+      });
+    });
+
+    // Caso: onMap con valor inválido devuelve 400.
+    it('returns 400 when onMap is not a valid boolean', async () => {
+      await request(app.getHttpServer())
+        .get('/fan-profiles?onMap=foo')
+        .expect(400);
+    });
+
+    // Caso: la respuesta mantiene el shape de GET /fan-profiles/:id, sin email ni userId.
+    it('returns the same shape as GET /:id, without email or userId', async () => {
+      const profile = await createProfile('list-shape', true);
+
+      const response = await request(app.getHttpServer())
+        .get('/fan-profiles?onMap=true')
+        .expect(200);
+
+      const found = response.body.find(
+        (item: { id: string }) => item.id === profile.id,
+      );
+      expect(found).toEqual({
+        id: profile.id,
+        displayName: 'list-shape Fan',
+        showOnMap: true,
+        createdAt: expect.any(String),
+        updatedAt: expect.any(String),
+        city: {
+          id: cityId,
+          name: cityName,
+          country: {
+            id: countryId,
+            name: countryName,
+            code: expect.any(String),
+          },
+        },
+      });
+      expect(found).not.toHaveProperty('email');
+      expect(found).not.toHaveProperty('userId');
+    });
+  });
+
   describe('GET /fan-profiles/:id', () => {
     // Caso exitoso: devuelve 200 con los campos esperados, sin email ni userId.
     it('returns 200 with the fan profile, without email or userId', async () => {
