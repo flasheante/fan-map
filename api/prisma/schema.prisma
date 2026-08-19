@@ -1,0 +1,74 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// Represents the system identity of a person using FanMap.
+// Auth (login, password, OAuth, sessions) is not implemented yet.
+// Today the only way a User is created is as a side effect of
+// POST /fan-profiles (see FanProfilesService), which will be adapted
+// to read the User from the authenticated request context once Auth exists.
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  fanProfile FanProfile?
+
+  @@map("users")
+}
+
+// Minimal geographic catalog. Seeded manually for now (see prisma/seed.ts) —
+// not exposed for writes by end users. Not artist-specific: this catalog is
+// shared by every artist community FanMap supports.
+model Country {
+  id   String @id @default(uuid())
+  name String
+  code String @unique // ISO 3166-1 alpha-2
+
+  cities City[]
+
+  @@map("countries")
+}
+
+model City {
+  id        String @id @default(uuid())
+  name      String
+  countryId String
+
+  country     Country      @relation(fields: [countryId], references: [id])
+  fanProfiles FanProfile[]
+
+  @@unique([countryId, name])
+  @@index([countryId])
+  @@map("cities")
+}
+
+// A user's public-facing fan data: display name, location and whether they
+// opt in to appear on the fan map. Intentionally artist-agnostic — following
+// a specific artist is a separate future domain, not modeled here.
+model FanProfile {
+  id          String   @id @default(uuid())
+  userId      String   @unique
+  cityId      String
+  displayName String
+  showOnMap   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id])
+  city City @relation(fields: [cityId], references: [id])
+
+  @@index([showOnMap])
+  @@index([cityId])
+  @@map("fan_profiles")
+}
