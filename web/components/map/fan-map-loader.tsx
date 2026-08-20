@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import type { FanProfileOnMap } from "@/lib/api";
+import type { ArtistFan } from "@/lib/api";
 
 // Leaflet accede a `window` al importarse, por lo que el mapa solo puede
 // cargarse en el cliente. `next/dynamic` con `ssr: false` solo puede
@@ -19,7 +19,7 @@ const FanMap = dynamic(
 );
 
 interface FanMapLoaderProps {
-  fans: FanProfileOnMap[];
+  fans: ArtistFan[];
 }
 
 export function FanMapLoader({ fans }: FanMapLoaderProps) {

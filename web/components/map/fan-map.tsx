@@ -10,12 +10,12 @@ import {
 } from "react-leaflet";
 import L, { type LatLngBoundsExpression, type LatLngTuple } from "leaflet";
 import "leaflet/dist/leaflet.css";
-import type { FanProfileOnMap } from "@/lib/api";
+import type { ArtistFan } from "@/lib/api";
 
 const DEFAULT_ZOOM = 2;
 const SINGLE_FAN_ZOOM = 10;
 
-function FitBounds({ fans }: { fans: FanProfileOnMap[] }) {
+function FitBounds({ fans }: { fans: ArtistFan[] }) {
   const map = useMap();
 
   useEffect(() => {
@@ -37,7 +37,7 @@ function FitBounds({ fans }: { fans: FanProfileOnMap[] }) {
 }
 
 interface FanMapProps {
-  fans: FanProfileOnMap[];
+  fans: ArtistFan[];
 }
 
 // Este componente solo se carga en el cliente (ver app/map/page.tsx, que lo
