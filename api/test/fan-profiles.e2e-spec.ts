@@ -41,7 +41,7 @@ describe('FanProfiles (e2e)', () => {
     countryId = country.id;
 
     const city = await prisma.city.create({
-      data: { name: cityName, countryId },
+      data: { name: cityName, countryId, latitude: -32.89, longitude: -68.84 },
     });
     cityId = city.id;
 
@@ -220,6 +220,8 @@ describe('FanProfiles (e2e)', () => {
       expect(response.body.city).toEqual({
         id: cityId,
         name: cityName,
+        latitude: -32.89,
+        longitude: -68.84,
         country: {
           id: countryId,
           name: countryName,
@@ -322,6 +324,8 @@ describe('FanProfiles (e2e)', () => {
         city: {
           id: cityId,
           name: cityName,
+          latitude: -32.89,
+          longitude: -68.84,
           country: {
             id: countryId,
             name: countryName,
@@ -331,6 +335,79 @@ describe('FanProfiles (e2e)', () => {
       });
       expect(found).not.toHaveProperty('email');
       expect(found).not.toHaveProperty('userId');
+    });
+  });
+
+  describe('GET /fan-profiles?onMap=true coordinate filtering', () => {
+    async function createProfileInCity(
+      label: string,
+      showOnMap: boolean,
+      city: string,
+    ) {
+      const email = uniqueEmail(label);
+      const response = await request(app.getHttpServer())
+        .post('/fan-profiles')
+        .send({ email, displayName: `${label} Fan`, cityId: city, showOnMap })
+        .expect(201);
+      return response.body as { id: string };
+    }
+
+    // Fan A: visible + ciudad con coordenadas → debe aparecer con onMap=true.
+    // Fan B: visible + ciudad sin coordenadas → NO debe aparecer con onMap=true.
+    // Fan C: no visible + ciudad con coordenadas → NO debe aparecer con onMap=true.
+    it('returns only the profile that is visible and has city coordinates', async () => {
+      const fanA = await createProfileInCity('coord-fan-a', true, cityId);
+      const fanB = await createProfileInCity('coord-fan-b', true, secondCityId);
+      const fanC = await createProfileInCity('coord-fan-c', false, cityId);
+
+      const response = await request(app.getHttpServer())
+        .get('/fan-profiles?onMap=true')
+        .expect(200);
+
+      const ids: string[] = response.body.map(
+        (profile: { id: string }) => profile.id,
+      );
+      expect(ids).toContain(fanA.id);
+      expect(ids).not.toContain(fanB.id);
+      expect(ids).not.toContain(fanC.id);
+    });
+
+    // GET /fan-profiles (sin filtro) sigue devolviendo los tres perfiles,
+    // sin aplicar el filtro de coordenadas.
+    it('returns all three profiles when onMap is not provided', async () => {
+      const fanA = await createProfileInCity('coord-all-a', true, cityId);
+      const fanB = await createProfileInCity('coord-all-b', true, secondCityId);
+      const fanC = await createProfileInCity('coord-all-c', false, cityId);
+
+      const response = await request(app.getHttpServer())
+        .get('/fan-profiles')
+        .expect(200);
+
+      const ids: string[] = response.body.map(
+        (profile: { id: string }) => profile.id,
+      );
+      expect(ids).toEqual(
+        expect.arrayContaining([fanA.id, fanB.id, fanC.id]),
+      );
+    });
+
+    // GET /fan-profiles?onMap=false sigue funcionando como antes: solo filtra
+    // por showOnMap=false, sin importar las coordenadas de la ciudad.
+    it('returns only the non-visible profile when onMap=false, regardless of coordinates', async () => {
+      const fanA = await createProfileInCity('coord-off-a', true, cityId);
+      const fanB = await createProfileInCity('coord-off-b', true, secondCityId);
+      const fanC = await createProfileInCity('coord-off-c', false, cityId);
+
+      const response = await request(app.getHttpServer())
+        .get('/fan-profiles?onMap=false')
+        .expect(200);
+
+      const ids: string[] = response.body.map(
+        (profile: { id: string }) => profile.id,
+      );
+      expect(ids).toContain(fanC.id);
+      expect(ids).not.toContain(fanA.id);
+      expect(ids).not.toContain(fanB.id);
     });
   });
 
@@ -357,6 +434,8 @@ describe('FanProfiles (e2e)', () => {
         city: {
           id: cityId,
           name: cityName,
+          latitude: -32.89,
+          longitude: -68.84,
           country: {
             id: countryId,
             name: countryName,
@@ -441,6 +520,8 @@ describe('FanProfiles (e2e)', () => {
       expect(response.body.city).toEqual({
         id: secondCityId,
         name: secondCityName,
+        latitude: null,
+        longitude: null,
         country: {
           id: countryId,
           name: countryName,
@@ -535,6 +616,8 @@ describe('FanProfiles (e2e)', () => {
         city: {
           id: cityId,
           name: cityName,
+          latitude: -32.89,
+          longitude: -68.84,
           country: {
             id: countryId,
             name: countryName,

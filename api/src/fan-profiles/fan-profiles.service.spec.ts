@@ -30,7 +30,13 @@ describe('FanProfilesService', () => {
     cityId: 'city-1',
   };
 
-  const city = { id: 'city-1', name: 'Buenos Aires', countryId: 'country-1' };
+  const city = {
+    id: 'city-1',
+    name: 'Buenos Aires',
+    countryId: 'country-1',
+    latitude: -34.6037,
+    longitude: -58.3816,
+  };
   const createdUser = { id: 'user-1', email: dto.email };
   const createdFanProfile = {
     id: 'profile-1',
@@ -44,10 +50,13 @@ describe('FanProfilesService', () => {
       id: 'city-1',
       name: 'Buenos Aires',
       countryId: 'country-1',
+      latitude: -34.6037,
+      longitude: -58.3816,
       country: { id: 'country-1', name: 'Argentina', code: 'AR' },
     },
   };
 
+  // city-2 tiene coordenadas nulas: representa una ciudad sin geocodificar.
   const secondFanProfile = {
     id: 'profile-2',
     userId: 'user-2',
@@ -60,6 +69,8 @@ describe('FanProfilesService', () => {
       id: 'city-2',
       name: 'Cordoba',
       countryId: 'country-1',
+      latitude: null,
+      longitude: null,
       country: { id: 'country-1', name: 'Argentina', code: 'AR' },
     },
   };
@@ -146,6 +157,8 @@ describe('FanProfilesService', () => {
       city: {
         id: city.id,
         name: city.name,
+        latitude: city.latitude,
+        longitude: city.longitude,
         country: { id: 'country-1', name: 'Argentina', code: 'AR' },
       },
     });
@@ -187,6 +200,8 @@ describe('FanProfilesService', () => {
         city: {
           id: city.id,
           name: city.name,
+          latitude: city.latitude,
+          longitude: city.longitude,
           country: { id: 'country-1', name: 'Argentina', code: 'AR' },
         },
       });
@@ -309,6 +324,8 @@ describe('FanProfilesService', () => {
         city: {
           id: city.id,
           name: city.name,
+          latitude: city.latitude,
+          longitude: city.longitude,
           country: { id: 'country-1', name: 'Argentina', code: 'AR' },
         },
       });
@@ -329,24 +346,83 @@ describe('FanProfilesService', () => {
       expect(result).toHaveLength(2);
     });
 
-    // onMap=true: filtra showOnMap=true.
-    it('filters by showOnMap=true when onMap is "true"', async () => {
+    // onMap=true: filtra showOnMap=true Y ciudad con coordenadas no nulas.
+    it('filters by showOnMap=true and non-null city coordinates when onMap is "true"', async () => {
       await service.findAll({ onMap: 'true' });
 
       expect(prisma.fanProfile.findMany).toHaveBeenCalledWith({
-        where: { showOnMap: true },
+        where: {
+          showOnMap: true,
+          city: { latitude: { not: null }, longitude: { not: null } },
+        },
         include: { city: { include: { country: true } } },
       });
     });
 
-    // onMap=false: filtra showOnMap=false.
-    it('filters by showOnMap=false when onMap is "false"', async () => {
+    // onMap=false: filtra showOnMap=false, sin agregar filtros de coordenadas.
+    it('filters by showOnMap=false without adding coordinate filters when onMap is "false"', async () => {
       await service.findAll({ onMap: 'false' });
 
       expect(prisma.fanProfile.findMany).toHaveBeenCalledWith({
         where: { showOnMap: false },
         include: { city: { include: { country: true } } },
       });
+    });
+
+    // sin onMap: no agrega filtros de coordenadas.
+    it('does not add coordinate filters when onMap is not provided', async () => {
+      await service.findAll({});
+
+      expect(prisma.fanProfile.findMany).toHaveBeenCalledWith({
+        where: {},
+        include: { city: { include: { country: true } } },
+      });
+    });
+
+    // onMap=true: un perfil visible cuya ciudad no tiene coordenadas no debe
+    // aparecer (el filtro se resuelve en la base, simulado acá vía el mock).
+    it('excludes a visible profile without coordinates from the onMap=true result', async () => {
+      prisma.fanProfile.findMany.mockResolvedValue([]);
+
+      const result = await service.findAll({ onMap: 'true' });
+
+      expect(prisma.fanProfile.findMany).toHaveBeenCalledWith({
+        where: {
+          showOnMap: true,
+          city: { latitude: { not: null }, longitude: { not: null } },
+        },
+        include: { city: { include: { country: true } } },
+      });
+      expect(result).toEqual([]);
+    });
+
+    // onMap=true: un perfil visible cuya ciudad sí tiene coordenadas aparece.
+    it('includes a visible profile with coordinates in the onMap=true result', async () => {
+      const visibleWithCoords = {
+        ...createdFanProfile,
+        showOnMap: true,
+        city: createdFanProfile.city,
+      };
+      prisma.fanProfile.findMany.mockResolvedValue([visibleWithCoords]);
+
+      const result = await service.findAll({ onMap: 'true' });
+
+      expect(result).toEqual([
+        {
+          id: visibleWithCoords.id,
+          displayName: visibleWithCoords.displayName,
+          showOnMap: true,
+          createdAt: visibleWithCoords.createdAt,
+          updatedAt: visibleWithCoords.updatedAt,
+          city: {
+            id: city.id,
+            name: city.name,
+            latitude: city.latitude,
+            longitude: city.longitude,
+            country: { id: 'country-1', name: 'Argentina', code: 'AR' },
+          },
+        },
+      ]);
     });
 
     // Mapea correctamente city/country para cada perfil.
@@ -363,6 +439,8 @@ describe('FanProfilesService', () => {
           city: {
             id: city.id,
             name: city.name,
+            latitude: city.latitude,
+            longitude: city.longitude,
             country: { id: 'country-1', name: 'Argentina', code: 'AR' },
           },
         },
@@ -375,6 +453,8 @@ describe('FanProfilesService', () => {
           city: {
             id: secondFanProfile.city.id,
             name: secondFanProfile.city.name,
+            latitude: secondFanProfile.city.latitude,
+            longitude: secondFanProfile.city.longitude,
             country: { id: 'country-1', name: 'Argentina', code: 'AR' },
           },
         },

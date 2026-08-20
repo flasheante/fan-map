@@ -51,7 +51,14 @@ export class FanProfilesService {
   async findAll(query: FindFanProfilesQueryDto) {
     const where: Prisma.FanProfileWhereInput = {};
     if (query.onMap !== undefined) {
-      where.showOnMap = query.onMap === 'true';
+      const onMap = query.onMap === 'true';
+      where.showOnMap = onMap;
+      if (onMap) {
+        where.city = {
+          latitude: { not: null },
+          longitude: { not: null },
+        };
+      }
     }
 
     const fanProfiles = (await this.prisma.fanProfile.findMany({
@@ -117,6 +124,8 @@ function toFanProfileResponse(fanProfile: FanProfileWithLocation) {
     city: {
       id: fanProfile.city.id,
       name: fanProfile.city.name,
+      latitude: fanProfile.city.latitude,
+      longitude: fanProfile.city.longitude,
       country: {
         id: fanProfile.city.country.id,
         name: fanProfile.city.country.name,
