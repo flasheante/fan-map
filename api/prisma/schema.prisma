@@ -49,6 +49,7 @@ model City {
 
   country     Country      @relation(fields: [countryId], references: [id])
   fanProfiles FanProfile[]
+  shows       Show[]
 
   @@unique([countryId, name])
   @@index([countryId])
@@ -67,7 +68,8 @@ model Artist {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  fans FanArtist[]
+  fans  FanArtist[]
+  shows Show[]
 
   @@map("artists")
 }
@@ -106,4 +108,56 @@ model FanArtist {
   @@id([fanProfileId, artistId])
   @@index([artistId])
   @@map("fan_artists")
+}
+
+// A concert performance by an Artist in a City. Not artist-specific (any
+// Artist can have Shows); today only The Warning has seeded/entered data.
+// Setlist is optional: a Show can exist before its setlist is known.
+model Show {
+  id        String   @id @default(uuid())
+  artistId  String
+  cityId    String
+  date      DateTime
+  venue     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  artist  Artist   @relation(fields: [artistId], references: [id])
+  city    City     @relation(fields: [cityId], references: [id])
+  setlist Setlist?
+
+  @@index([artistId])
+  @@index([cityId])
+  @@map("shows")
+}
+
+// The setlist for a Show — 1:1. Created once the setlist is known, not
+// necessarily together with the Show.
+model Setlist {
+  id        String   @id @default(uuid())
+  showId    String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  show  Show          @relation(fields: [showId], references: [id])
+  songs SetlistSong[]
+
+  @@map("setlists")
+}
+
+// A song played within a Setlist, in performance order (position, 1-based —
+// enforced by a DB check constraint added in the migration SQL, since this
+// Prisma version has no @@check attribute). Title is free text: no Song
+// catalog yet, since there is no write API for shows/setlists in this slice.
+model SetlistSong {
+  id        String @id @default(uuid())
+  setlistId String
+  title     String
+  position  Int
+
+  setlist Setlist @relation(fields: [setlistId], references: [id])
+
+  @@unique([setlistId, position])
+  @@index([setlistId])
+  @@map("setlist_songs")
 }
