@@ -70,6 +70,46 @@ describe('LocationsService', () => {
       expect(result).toBe(cities);
     });
 
+    it('returns latitude/longitude when the city has coordinates', async () => {
+      const country = { id: 'country-1', name: 'Argentina', code: 'AR' };
+      const cities = [
+        {
+          id: 'c1',
+          name: 'Buenos Aires',
+          countryId: 'country-1',
+          latitude: -34.6037,
+          longitude: -58.3816,
+        },
+      ];
+      prisma.country.findUnique.mockResolvedValue(country);
+      prisma.city.findMany.mockResolvedValue(cities);
+
+      const result = await service.findCitiesByCountryId('country-1');
+
+      expect(result[0].latitude).toBe(-34.6037);
+      expect(result[0].longitude).toBe(-58.3816);
+    });
+
+    it('returns null latitude/longitude when the city has no coordinates yet', async () => {
+      const country = { id: 'country-1', name: 'Argentina', code: 'AR' };
+      const cities = [
+        {
+          id: 'c1',
+          name: 'Rosario',
+          countryId: 'country-1',
+          latitude: null,
+          longitude: null,
+        },
+      ];
+      prisma.country.findUnique.mockResolvedValue(country);
+      prisma.city.findMany.mockResolvedValue(cities);
+
+      const result = await service.findCitiesByCountryId('country-1');
+
+      expect(result[0].latitude).toBeNull();
+      expect(result[0].longitude).toBeNull();
+    });
+
     it('throws NotFoundException when the country does not exist', async () => {
       prisma.country.findUnique.mockResolvedValue(null);
 

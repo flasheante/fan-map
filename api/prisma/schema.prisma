@@ -41,9 +41,11 @@ model Country {
 }
 
 model City {
-  id        String @id @default(uuid())
+  id        String  @id @default(uuid())
   name      String
   countryId String
+  latitude  Float?
+  longitude Float?
 
   country     Country      @relation(fields: [countryId], references: [id])
   fanProfiles FanProfile[]

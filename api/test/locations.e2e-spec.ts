@@ -43,7 +43,12 @@ describe('Locations (e2e)', () => {
     await prisma.city.createMany({
       data: [
         { name: `Rosario ${suffix}`, countryId: countryWithCitiesId },
-        { name: `Buenos Aires ${suffix}`, countryId: countryWithCitiesId },
+        {
+          name: `Buenos Aires ${suffix}`,
+          countryId: countryWithCitiesId,
+          latitude: -34.6037,
+          longitude: -58.3816,
+        },
         { name: `Cordoba ${suffix}`, countryId: countryWithCitiesId },
       ],
     });
@@ -94,6 +99,32 @@ describe('Locations (e2e)', () => {
         `Cordoba ${suffix}`,
         `Rosario ${suffix}`,
       ]);
+    });
+
+    it('returns latitude and longitude for a city that has coordinates', async () => {
+      const response = await request(app.getHttpServer())
+        .get(`/countries/${countryWithCitiesId}/cities`)
+        .expect(200);
+
+      const buenosAires = response.body.find(
+        (city: { name: string }) => city.name === `Buenos Aires ${suffix}`,
+      );
+
+      expect(buenosAires.latitude).toBe(-34.6037);
+      expect(buenosAires.longitude).toBe(-58.3816);
+    });
+
+    it('returns null latitude and longitude for a city without coordinates', async () => {
+      const response = await request(app.getHttpServer())
+        .get(`/countries/${countryWithCitiesId}/cities`)
+        .expect(200);
+
+      const rosario = response.body.find(
+        (city: { name: string }) => city.name === `Rosario ${suffix}`,
+      );
+
+      expect(rosario.latitude).toBeNull();
+      expect(rosario.longitude).toBeNull();
     });
 
     it('returns an empty array for a country with no cities', async () => {
