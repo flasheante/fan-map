@@ -4,12 +4,13 @@ import { ArtistsService } from './artists.service';
 
 describe('ArtistsController', () => {
   let controller: ArtistsController;
-  let service: { findAll: jest.Mock; findOne: jest.Mock };
+  let service: { findAll: jest.Mock; findOne: jest.Mock; findFans: jest.Mock };
 
   beforeEach(async () => {
     service = {
       findAll: jest.fn(),
       findOne: jest.fn(),
+      findFans: jest.fn(),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -50,5 +51,18 @@ describe('ArtistsController', () => {
 
     expect(service.findOne).toHaveBeenCalledWith('artist-1');
     expect(result).toBe(artist);
+  });
+
+  it('gets an artist fans via the service', async () => {
+    const response = {
+      artist: { id: 'artist-1', name: 'The Warning', slug: 'the-warning', imageUrl: null },
+      fans: [],
+    };
+    service.findFans.mockResolvedValue(response);
+
+    const result = await controller.findFans('artist-1', { onMap: 'true' });
+
+    expect(service.findFans).toHaveBeenCalledWith('artist-1', { onMap: 'true' });
+    expect(result).toBe(response);
   });
 });

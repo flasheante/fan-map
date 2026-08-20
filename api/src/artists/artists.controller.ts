@@ -1,5 +1,6 @@
-import { Controller, Get, Param, ParseUUIDPipe } from '@nestjs/common';
+import { Controller, Get, Param, ParseUUIDPipe, Query } from '@nestjs/common';
 import { ArtistsService } from './artists.service';
+import { FindArtistFansQueryDto } from './dto/find-artist-fans-query.dto';
 
 @Controller('artists')
 export class ArtistsController {
@@ -13,5 +14,13 @@ export class ArtistsController {
   @Get(':id')
   findOne(@Param('id', ParseUUIDPipe) id: string) {
     return this.artistsService.findOne(id);
+  }
+
+  @Get(':artistId/fans')
+  findFans(
+    @Param('artistId', ParseUUIDPipe) artistId: string,
+    @Query() query: FindArtistFansQueryDto,
+  ) {
+    return this.artistsService.findFans(artistId, query);
   }
 }
