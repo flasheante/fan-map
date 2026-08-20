@@ -55,9 +55,25 @@ model City {
   @@map("cities")
 }
 
-// A user's public-facing fan data: display name, location and whether they
-// opt in to appear on the fan map. Intentionally artist-agnostic — following
-// a specific artist is a separate future domain, not modeled here.
+// A music artist a FanMap community can be built around. Today the system
+// only has one seeded artist (The Warning, see prisma/seed.ts), but a
+// FanProfile can follow any number of artists via FanArtist — the domain is
+// not hardcoded to a single artist.
+model Artist {
+  id        String   @id @default(uuid())
+  name      String
+  slug      String   @unique
+  imageUrl  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  fans FanArtist[]
+
+  @@map("artists")
+}
+
+// A user's public-facing fan data: display name, location, whether they opt
+// in to appear on the fan map, and which artists they follow (see FanArtist).
 model FanProfile {
   id          String   @id @default(uuid())
   userId      String   @unique
@@ -67,10 +83,27 @@ model FanProfile {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  user User @relation(fields: [userId], references: [id])
-  city City @relation(fields: [cityId], references: [id])
+  user    User        @relation(fields: [userId], references: [id])
+  city    City        @relation(fields: [cityId], references: [id])
+  artists FanArtist[]
 
   @@index([showOnMap])
   @@index([cityId])
   @@map("fan_profiles")
+}
+
+// Join entity for the FanProfile <-> Artist N:N relation (a fan follows N
+// artists, an artist has N fans). Modeled explicitly (not an implicit m2n)
+// so it can carry its own metadata, e.g. createdAt for "followed since".
+model FanArtist {
+  fanProfileId String
+  artistId     String
+  createdAt    DateTime @default(now())
+
+  fanProfile FanProfile @relation(fields: [fanProfileId], references: [id])
+  artist     Artist     @relation(fields: [artistId], references: [id])
+
+  @@id([fanProfileId, artistId])
+  @@index([artistId])
+  @@map("fan_artists")
 }

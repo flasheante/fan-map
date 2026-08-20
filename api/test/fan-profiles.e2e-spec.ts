@@ -15,9 +15,16 @@ describe('FanProfiles (e2e)', () => {
   const cityName = `Fan City ${suffix}`;
   const secondCityName = `Fan City 2 ${suffix}`;
 
+  const artistAName = `Fan Artist A ${suffix}`;
+  const artistASlug = `fan-artist-a-${suffix}`;
+  const artistBName = `Fan Artist B ${suffix}`;
+  const artistBSlug = `fan-artist-b-${suffix}`;
+
   let countryId: string;
   let cityId: string;
   let secondCityId: string;
+  let artistAId: string;
+  let artistBId: string;
 
   // ids/emails created by individual tests, cleaned up in afterAll.
   const createdUserEmails: string[] = [];
@@ -49,6 +56,16 @@ describe('FanProfiles (e2e)', () => {
       data: { name: secondCityName, countryId },
     });
     secondCityId = secondCity.id;
+
+    const artistA = await prisma.artist.create({
+      data: { name: artistAName, slug: artistASlug },
+    });
+    artistAId = artistA.id;
+
+    const artistB = await prisma.artist.create({
+      data: { name: artistBName, slug: artistBSlug },
+    });
+    artistBId = artistB.id;
   });
 
   afterAll(async () => {
@@ -56,10 +73,19 @@ describe('FanProfiles (e2e)', () => {
       where: { email: { in: createdUserEmails } },
       select: { id: true },
     });
+    const userIds = users.map((user) => user.id);
+    const fanProfiles = await prisma.fanProfile.findMany({
+      where: { userId: { in: userIds } },
+      select: { id: true },
+    });
+    await prisma.fanArtist.deleteMany({
+      where: { fanProfileId: { in: fanProfiles.map((profile) => profile.id) } },
+    });
     await prisma.fanProfile.deleteMany({
-      where: { userId: { in: users.map((user) => user.id) } },
+      where: { userId: { in: userIds } },
     });
     await prisma.user.deleteMany({ where: { email: { in: createdUserEmails } } });
+    await prisma.artist.deleteMany({ where: { id: { in: [artistAId, artistBId] } } });
     await prisma.city.deleteMany({ where: { id: { in: [cityId, secondCityId] } } });
     await prisma.country.deleteMany({ where: { id: countryId } });
     await app.close();
@@ -332,6 +358,7 @@ describe('FanProfiles (e2e)', () => {
             code: expect.any(String),
           },
         },
+        artists: [],
       });
       expect(found).not.toHaveProperty('email');
       expect(found).not.toHaveProperty('userId');
@@ -442,6 +469,7 @@ describe('FanProfiles (e2e)', () => {
             code: expect.any(String),
           },
         },
+        artists: [],
       });
       expect(response.body).not.toHaveProperty('email');
       expect(response.body).not.toHaveProperty('userId');
@@ -624,9 +652,283 @@ describe('FanProfiles (e2e)', () => {
             code: expect.any(String),
           },
         },
+        artists: [],
       });
       expect(response.body).not.toHaveProperty('email');
       expect(response.body).not.toHaveProperty('userId');
+    });
+  });
+
+  describe('POST /fan-profiles with artistIds', () => {
+    // Requisito: crea FanProfile + FanArtist de forma atómica.
+    it('creates FanArtist rows for the given artistIds', async () => {
+      const email = uniqueEmail('artists-create');
+
+      const response = await request(app.getHttpServer())
+        .post('/fan-profiles')
+        .send({
+          email,
+          displayName: 'Artists Fan',
+          cityId,
+          artistIds: [artistAId, artistBId],
+        })
+        .expect(201);
+
+      const fanArtists = await prisma.fanArtist.findMany({
+        where: { fanProfileId: response.body.id },
+      });
+      expect(fanArtists.map((fa) => fa.artistId).sort()).toEqual(
+        [artistAId, artistBId].sort(),
+      );
+    });
+
+    it('includes the artists in the response, ordered by name', async () => {
+      const email = uniqueEmail('artists-response');
+
+      const response = await request(app.getHttpServer())
+        .post('/fan-profiles')
+        .send({
+          email,
+          displayName: 'Artists Response Fan',
+          cityId,
+          artistIds: [artistBId, artistAId],
+        })
+        .expect(201);
+
+      expect(response.body.artists).toEqual([
+        { id: artistAId, name: artistAName, slug: artistASlug, imageUrl: null },
+        { id: artistBId, name: artistBName, slug: artistBSlug, imageUrl: null },
+      ]);
+    });
+
+    it('creates a profile with an empty artists array when artistIds is not sent', async () => {
+      const email = uniqueEmail('artists-none');
+
+      const response = await request(app.getHttpServer())
+        .post('/fan-profiles')
+        .send({ email, displayName: 'No Artists Fan', cityId })
+        .expect(201);
+
+      expect(response.body.artists).toEqual([]);
+    });
+
+    it('deduplicates repeated artistIds without erroring', async () => {
+      const email = uniqueEmail('artists-dedupe');
+
+      const response = await request(app.getHttpServer())
+        .post('/fan-profiles')
+        .send({
+          email,
+          displayName: 'Dedupe Fan',
+          cityId,
+          artistIds: [artistAId, artistAId],
+        })
+        .expect(201);
+
+      expect(response.body.artists).toEqual([
+        { id: artistAId, name: artistAName, slug: artistASlug, imageUrl: null },
+      ]);
+    });
+
+    // Requisito: valida que todos los artistas existan.
+    it('returns 400 when an artistId does not reference an existing artist', async () => {
+      const email = uniqueEmail('artists-missing');
+
+      await request(app.getHttpServer())
+        .post('/fan-profiles')
+        .send({
+          email,
+          displayName: 'Missing Artist Fan',
+          cityId,
+          artistIds: [artistAId, randomUUID()],
+        })
+        .expect(400);
+    });
+
+    // Requisito: creación atómica — si un artistId no existe, no debe crearse
+    // ni el User ni el FanProfile.
+    it('creates neither the User nor the FanProfile when an artistId is invalid', async () => {
+      const email = uniqueEmail('artists-atomic');
+
+      await request(app.getHttpServer())
+        .post('/fan-profiles')
+        .send({
+          email,
+          displayName: 'Atomic Fan',
+          cityId,
+          artistIds: [randomUUID()],
+        })
+        .expect(400);
+
+      const user = await prisma.user.findUnique({ where: { email } });
+      expect(user).toBeNull();
+    });
+
+    it('returns 400 when artistIds contains a value that is not a valid UUID', async () => {
+      const email = uniqueEmail('artists-invalid-uuid');
+
+      await request(app.getHttpServer())
+        .post('/fan-profiles')
+        .send({
+          email,
+          displayName: 'Invalid UUID Fan',
+          cityId,
+          artistIds: ['not-a-uuid'],
+        })
+        .expect(400);
+    });
+
+    it('returns 400 when artistIds is not an array', async () => {
+      const email = uniqueEmail('artists-not-array');
+
+      await request(app.getHttpServer())
+        .post('/fan-profiles')
+        .send({
+          email,
+          displayName: 'Not Array Fan',
+          cityId,
+          artistIds: artistAId,
+        })
+        .expect(400);
+    });
+  });
+
+  describe('GET /fan-profiles(/:id) with artists', () => {
+    it('GET /fan-profiles/:id includes the artists the fan follows', async () => {
+      const email = uniqueEmail('get-artists');
+      const created = await request(app.getHttpServer())
+        .post('/fan-profiles')
+        .send({
+          email,
+          displayName: 'Get Artists Fan',
+          cityId,
+          artistIds: [artistAId],
+        })
+        .expect(201);
+
+      const response = await request(app.getHttpServer())
+        .get(`/fan-profiles/${created.body.id}`)
+        .expect(200);
+
+      expect(response.body.artists).toEqual([
+        { id: artistAId, name: artistAName, slug: artistASlug, imageUrl: null },
+      ]);
+    });
+
+    it('GET /fan-profiles includes the artists for each fan in the list', async () => {
+      const email = uniqueEmail('list-artists');
+      const created = await request(app.getHttpServer())
+        .post('/fan-profiles')
+        .send({
+          email,
+          displayName: 'List Artists Fan',
+          cityId,
+          artistIds: [artistAId, artistBId],
+        })
+        .expect(201);
+
+      const response = await request(app.getHttpServer())
+        .get('/fan-profiles')
+        .expect(200);
+
+      const found = response.body.find(
+        (profile: { id: string }) => profile.id === created.body.id,
+      );
+      expect(found.artists).toEqual([
+        { id: artistAId, name: artistAName, slug: artistASlug, imageUrl: null },
+        { id: artistBId, name: artistBName, slug: artistBSlug, imageUrl: null },
+      ]);
+    });
+  });
+
+  describe('PATCH /fan-profiles/:id with artistIds', () => {
+    async function createProfileWithArtists(label: string, artistIds: string[]) {
+      const email = uniqueEmail(label);
+      const response = await request(app.getHttpServer())
+        .post('/fan-profiles')
+        .send({ email, displayName: `${label} Fan`, cityId, artistIds })
+        .expect(201);
+      return response.body as { id: string };
+    }
+
+    it('replaces the artists a fan follows', async () => {
+      const profile = await createProfileWithArtists('patch-artists-replace', [
+        artistAId,
+      ]);
+
+      const response = await request(app.getHttpServer())
+        .patch(`/fan-profiles/${profile.id}`)
+        .send({ artistIds: [artistBId] })
+        .expect(200);
+
+      expect(response.body.artists).toEqual([
+        { id: artistBId, name: artistBName, slug: artistBSlug, imageUrl: null },
+      ]);
+
+      const fanArtists = await prisma.fanArtist.findMany({
+        where: { fanProfileId: profile.id },
+      });
+      expect(fanArtists.map((fa) => fa.artistId)).toEqual([artistBId]);
+    });
+
+    it('clears all artists when artistIds is an empty array', async () => {
+      const profile = await createProfileWithArtists('patch-artists-clear', [
+        artistAId,
+        artistBId,
+      ]);
+
+      const response = await request(app.getHttpServer())
+        .patch(`/fan-profiles/${profile.id}`)
+        .send({ artistIds: [] })
+        .expect(200);
+
+      expect(response.body.artists).toEqual([]);
+    });
+
+    it('leaves existing artists untouched when artistIds is not sent', async () => {
+      const profile = await createProfileWithArtists('patch-artists-untouched', [
+        artistAId,
+      ]);
+
+      const response = await request(app.getHttpServer())
+        .patch(`/fan-profiles/${profile.id}`)
+        .send({ displayName: 'Renamed Untouched Fan' })
+        .expect(200);
+
+      expect(response.body.artists).toEqual([
+        { id: artistAId, name: artistAName, slug: artistASlug, imageUrl: null },
+      ]);
+    });
+
+    // Requisito: reemplazo atómico — si un artistId no existe, no debe
+    // tocarse la asociación existente.
+    it('returns 400 and keeps the existing artists when an artistId is invalid', async () => {
+      const profile = await createProfileWithArtists('patch-artists-invalid', [
+        artistAId,
+      ]);
+
+      await request(app.getHttpServer())
+        .patch(`/fan-profiles/${profile.id}`)
+        .send({ artistIds: [randomUUID()] })
+        .expect(400);
+
+      const fanArtists = await prisma.fanArtist.findMany({
+        where: { fanProfileId: profile.id },
+      });
+      expect(fanArtists.map((fa) => fa.artistId)).toEqual([artistAId]);
+    });
+
+    it('deduplicates repeated artistIds without erroring', async () => {
+      const profile = await createProfileWithArtists('patch-artists-dedupe', []);
+
+      const response = await request(app.getHttpServer())
+        .patch(`/fan-profiles/${profile.id}`)
+        .send({ artistIds: [artistAId, artistAId] })
+        .expect(200);
+
+      expect(response.body.artists).toEqual([
+        { id: artistAId, name: artistAName, slug: artistASlug, imageUrl: null },
+      ]);
     });
   });
 });

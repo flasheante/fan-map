@@ -4,13 +4,21 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { City, Country, FanProfile, Prisma } from '@prisma/client';
+import { Artist, City, Country, FanArtist, FanProfile, Prisma } from '@prisma/client';
 import { PrismaService } from '../database/prisma.service';
 import { CreateFanProfileDto } from './dto/create-fan-profile.dto';
 import { UpdateFanProfileDto } from './dto/update-fan-profile.dto';
 import { FindFanProfilesQueryDto } from './dto/find-fan-profiles-query.dto';
 
-type FanProfileWithLocation = FanProfile & { city: City & { country: Country } };
+type FanProfileWithRelations = FanProfile & {
+  city: City & { country: Country };
+  artists: (FanArtist & { artist: Artist })[];
+};
+
+const FAN_PROFILE_INCLUDE = {
+  city: { include: { country: true } },
+  artists: { include: { artist: true }, orderBy: { artist: { name: 'asc' } } },
+} satisfies Prisma.FanProfileInclude;
 
 @Injectable()
 export class FanProfilesService {
@@ -31,6 +39,9 @@ export class FanProfilesService {
       throw new ConflictException(`Email ${dto.email} is already in use`);
     }
 
+    const artistIds = dto.artistIds ? Array.from(new Set(dto.artistIds)) : [];
+    await this.validateArtistsExist(artistIds);
+
     const fanProfile = (await this.prisma.$transaction(async (tx) => {
       const user = await tx.user.create({ data: { email: dto.email } });
 
@@ -40,10 +51,13 @@ export class FanProfilesService {
           cityId: dto.cityId,
           displayName: dto.displayName,
           showOnMap: dto.showOnMap ?? false,
+          artists: {
+            create: artistIds.map((artistId) => ({ artistId })),
+          },
         },
-        include: { city: { include: { country: true } } },
+        include: FAN_PROFILE_INCLUDE,
       });
-    })) as FanProfileWithLocation;
+    })) as FanProfileWithRelations;
 
     return toFanProfileResponse(fanProfile);
   }
@@ -63,8 +77,8 @@ export class FanProfilesService {
 
     const fanProfiles = (await this.prisma.fanProfile.findMany({
       where,
-      include: { city: { include: { country: true } } },
-    })) as FanProfileWithLocation[];
+      include: FAN_PROFILE_INCLUDE,
+    })) as FanProfileWithRelations[];
 
     return fanProfiles.map(toFanProfileResponse);
   }
@@ -72,8 +86,8 @@ export class FanProfilesService {
   async findOne(id: string) {
     const fanProfile = (await this.prisma.fanProfile.findUnique({
       where: { id },
-      include: { city: { include: { country: true } } },
-    })) as FanProfileWithLocation | null;
+      include: FAN_PROFILE_INCLUDE,
+    })) as FanProfileWithRelations | null;
 
     if (!fanProfile) {
       throw new NotFoundException(`FanProfile ${id} not found`);
@@ -99,22 +113,68 @@ export class FanProfilesService {
       }
     }
 
+    let artistIds: string[] | undefined;
+    if (dto.artistIds !== undefined) {
+      artistIds = Array.from(new Set(dto.artistIds));
+      await this.validateArtistsExist(artistIds);
+    }
+
     const data: Prisma.FanProfileUncheckedUpdateInput = {};
     if (dto.displayName !== undefined) data.displayName = dto.displayName;
     if (dto.cityId !== undefined) data.cityId = dto.cityId;
     if (dto.showOnMap !== undefined) data.showOnMap = dto.showOnMap;
 
-    const fanProfile = (await this.prisma.fanProfile.update({
-      where: { id },
-      data,
-      include: { city: { include: { country: true } } },
-    })) as FanProfileWithLocation;
+    const fanProfile = (
+      artistIds === undefined
+        ? await this.prisma.fanProfile.update({
+            where: { id },
+            data,
+            include: FAN_PROFILE_INCLUDE,
+          })
+        : await this.prisma.$transaction(async (tx) => {
+            await tx.fanArtist.deleteMany({ where: { fanProfileId: id } });
+            if (artistIds!.length > 0) {
+              await tx.fanArtist.createMany({
+                data: artistIds!.map((artistId) => ({
+                  fanProfileId: id,
+                  artistId,
+                })),
+              });
+            }
+
+            return tx.fanProfile.update({
+              where: { id },
+              data,
+              include: FAN_PROFILE_INCLUDE,
+            });
+          })
+    ) as FanProfileWithRelations;
 
     return toFanProfileResponse(fanProfile);
   }
+
+  // Valida que todos los artistIds referencien artistas existentes. Genérico:
+  // no asume ningún artista en particular (p. ej. The Warning) ni una
+  // cantidad fija de artistas en el sistema.
+  private async validateArtistsExist(artistIds: string[]) {
+    if (artistIds.length === 0) return;
+
+    const found = await this.prisma.artist.findMany({
+      where: { id: { in: artistIds } },
+      select: { id: true },
+    });
+
+    if (found.length !== artistIds.length) {
+      const foundIds = new Set(found.map((artist) => artist.id));
+      const missing = artistIds.filter((id) => !foundIds.has(id));
+      throw new BadRequestException(
+        `Artist(s) not found: ${missing.join(', ')}`,
+      );
+    }
+  }
 }
 
-function toFanProfileResponse(fanProfile: FanProfileWithLocation) {
+function toFanProfileResponse(fanProfile: FanProfileWithRelations) {
   return {
     id: fanProfile.id,
     displayName: fanProfile.displayName,
@@ -132,5 +192,11 @@ function toFanProfileResponse(fanProfile: FanProfileWithLocation) {
         code: fanProfile.city.country.code,
       },
     },
+    artists: fanProfile.artists.map((fanArtist) => ({
+      id: fanArtist.artist.id,
+      name: fanArtist.artist.name,
+      slug: fanArtist.artist.slug,
+      imageUrl: fanArtist.artist.imageUrl,
+    })),
   };
 }

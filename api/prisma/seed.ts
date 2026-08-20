@@ -80,6 +80,12 @@ async function main() {
     }
   }
 
+  await prisma.artist.upsert({
+    where: { slug: 'the-warning' },
+    update: { name: 'The Warning' },
+    create: { name: 'The Warning', slug: 'the-warning' },
+  });
+
   console.log('Seed completed successfully');
 }
 

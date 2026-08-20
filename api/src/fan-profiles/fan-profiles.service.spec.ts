@@ -12,6 +12,7 @@ describe('FanProfilesService', () => {
   let prisma: {
     city: { findUnique: jest.Mock };
     user: { findUnique: jest.Mock };
+    artist: { findMany: jest.Mock };
     fanProfile: {
       findUnique: jest.Mock;
       findMany: jest.Mock;
@@ -21,7 +22,8 @@ describe('FanProfilesService', () => {
   };
   let tx: {
     user: { create: jest.Mock };
-    fanProfile: { create: jest.Mock };
+    fanProfile: { create: jest.Mock; update: jest.Mock };
+    fanArtist: { deleteMany: jest.Mock; createMany: jest.Mock };
   };
 
   const dto = {
@@ -37,6 +39,24 @@ describe('FanProfilesService', () => {
     latitude: -34.6037,
     longitude: -58.3816,
   };
+
+  const artistA = {
+    id: 'artist-a',
+    name: 'The Warning',
+    slug: 'the-warning',
+    imageUrl: null,
+    createdAt: new Date('2026-01-01T00:00:00.000Z'),
+    updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+  };
+  const artistB = {
+    id: 'artist-b',
+    name: 'Other Artist',
+    slug: 'other-artist',
+    imageUrl: 'https://example.com/other.jpg',
+    createdAt: new Date('2026-01-01T00:00:00.000Z'),
+    updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+  };
+
   const createdUser = { id: 'user-1', email: dto.email };
   const createdFanProfile = {
     id: 'profile-1',
@@ -54,6 +74,14 @@ describe('FanProfilesService', () => {
       longitude: -58.3816,
       country: { id: 'country-1', name: 'Argentina', code: 'AR' },
     },
+    artists: [
+      {
+        fanProfileId: 'profile-1',
+        artistId: 'artist-a',
+        createdAt: new Date('2026-01-01T00:00:00.000Z'),
+        artist: artistA,
+      },
+    ],
   };
 
   // city-2 tiene coordenadas nulas: representa una ciudad sin geocodificar.
@@ -73,17 +101,28 @@ describe('FanProfilesService', () => {
       longitude: null,
       country: { id: 'country-1', name: 'Argentina', code: 'AR' },
     },
+    artists: [],
   };
 
   beforeEach(async () => {
     tx = {
       user: { create: jest.fn().mockResolvedValue(createdUser) },
-      fanProfile: { create: jest.fn().mockResolvedValue(createdFanProfile) },
+      fanProfile: {
+        create: jest.fn().mockResolvedValue(createdFanProfile),
+        update: jest.fn().mockResolvedValue(createdFanProfile),
+      },
+      fanArtist: {
+        deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
+        createMany: jest.fn().mockResolvedValue({ count: 0 }),
+      },
     };
 
     prisma = {
       city: { findUnique: jest.fn().mockResolvedValue(city) },
       user: { findUnique: jest.fn().mockResolvedValue(null) },
+      artist: {
+        findMany: jest.fn().mockResolvedValue([artistA]),
+      },
       fanProfile: {
         findUnique: jest.fn().mockResolvedValue(createdFanProfile),
         findMany: jest
@@ -118,8 +157,12 @@ describe('FanProfilesService', () => {
         cityId: dto.cityId,
         displayName: dto.displayName,
         showOnMap: false,
+        artists: { create: [] },
       },
-      include: { city: { include: { country: true } } },
+      include: {
+        city: { include: { country: true } },
+        artists: { include: { artist: true }, orderBy: { artist: { name: 'asc' } } },
+      },
     });
   });
 
@@ -161,6 +204,9 @@ describe('FanProfilesService', () => {
         longitude: city.longitude,
         country: { id: 'country-1', name: 'Argentina', code: 'AR' },
       },
+      artists: [
+        { id: artistA.id, name: artistA.name, slug: artistA.slug, imageUrl: artistA.imageUrl },
+      ],
     });
     expect(result).not.toHaveProperty('userId');
     expect(result).not.toHaveProperty('email');
@@ -182,14 +228,86 @@ describe('FanProfilesService', () => {
     expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 
+  describe('create with artistIds', () => {
+    it('creates FanArtist rows for the given artistIds', async () => {
+      prisma.artist.findMany.mockResolvedValue([artistA, artistB]);
+
+      await service.create({ ...dto, artistIds: [artistA.id, artistB.id] });
+
+      expect(prisma.artist.findMany).toHaveBeenCalledWith({
+        where: { id: { in: [artistA.id, artistB.id] } },
+        select: { id: true },
+      });
+      expect(tx.fanProfile.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            artists: { create: [{ artistId: artistA.id }, { artistId: artistB.id }] },
+          }),
+        }),
+      );
+    });
+
+    it('creates no FanArtist rows when artistIds is not provided', async () => {
+      await service.create(dto);
+
+      expect(prisma.artist.findMany).not.toHaveBeenCalled();
+      expect(tx.fanProfile.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ artists: { create: [] } }),
+        }),
+      );
+    });
+
+    it('creates no FanArtist rows when artistIds is an empty array', async () => {
+      await service.create({ ...dto, artistIds: [] });
+
+      expect(prisma.artist.findMany).not.toHaveBeenCalled();
+      expect(tx.fanProfile.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ artists: { create: [] } }),
+        }),
+      );
+    });
+
+    it('deduplicates repeated artistIds before validating and creating', async () => {
+      prisma.artist.findMany.mockResolvedValue([artistA]);
+
+      await service.create({ ...dto, artistIds: [artistA.id, artistA.id] });
+
+      expect(prisma.artist.findMany).toHaveBeenCalledWith({
+        where: { id: { in: [artistA.id] } },
+        select: { id: true },
+      });
+      expect(tx.fanProfile.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            artists: { create: [{ artistId: artistA.id }] },
+          }),
+        }),
+      );
+    });
+
+    it('throws BadRequestException when an artistId does not reference an existing artist', async () => {
+      prisma.artist.findMany.mockResolvedValue([artistA]);
+
+      await expect(
+        service.create({ ...dto, artistIds: [artistA.id, 'missing-artist'] }),
+      ).rejects.toThrow(BadRequestException);
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+    });
+  });
+
   describe('findOne', () => {
-    // Caso exitoso: devuelve el perfil sin email/userId, incluyendo city y country.
-    it('returns a response without email or userId, including city and country', async () => {
+    // Caso exitoso: devuelve el perfil sin email/userId, incluyendo city, country y artists.
+    it('returns a response without email or userId, including city, country and artists', async () => {
       const result = await service.findOne(createdFanProfile.id);
 
       expect(prisma.fanProfile.findUnique).toHaveBeenCalledWith({
         where: { id: createdFanProfile.id },
-        include: { city: { include: { country: true } } },
+        include: {
+          city: { include: { country: true } },
+          artists: { include: { artist: true }, orderBy: { artist: { name: 'asc' } } },
+        },
       });
       expect(result).toEqual({
         id: createdFanProfile.id,
@@ -204,9 +322,20 @@ describe('FanProfilesService', () => {
           longitude: city.longitude,
           country: { id: 'country-1', name: 'Argentina', code: 'AR' },
         },
+        artists: [
+          { id: artistA.id, name: artistA.name, slug: artistA.slug, imageUrl: artistA.imageUrl },
+        ],
       });
       expect(result).not.toHaveProperty('userId');
       expect(result).not.toHaveProperty('email');
+    });
+
+    it('returns an empty artists array for a fan profile that follows no artists', async () => {
+      prisma.fanProfile.findUnique.mockResolvedValue(secondFanProfile);
+
+      const result = await service.findOne(secondFanProfile.id);
+
+      expect(result.artists).toEqual([]);
     });
 
     // Caso: FanProfile inexistente devuelve 404.
@@ -221,14 +350,18 @@ describe('FanProfilesService', () => {
 
   describe('update', () => {
     // Caso 2: actualiza solamente los campos enviados.
-    it('updates only the provided fields', async () => {
+    it('updates only the provided fields when artistIds is not sent', async () => {
       await service.update(createdFanProfile.id, { displayName: 'New Name' });
 
       expect(prisma.fanProfile.update).toHaveBeenCalledWith({
         where: { id: createdFanProfile.id },
         data: { displayName: 'New Name' },
-        include: { city: { include: { country: true } } },
+        include: {
+          city: { include: { country: true } },
+          artists: { include: { artist: true }, orderBy: { artist: { name: 'asc' } } },
+        },
       });
+      expect(prisma.$transaction).not.toHaveBeenCalled();
     });
 
     // Caso 3: puede actualizar displayName.
@@ -260,7 +393,10 @@ describe('FanProfilesService', () => {
       expect(prisma.fanProfile.update).toHaveBeenCalledWith({
         where: { id: createdFanProfile.id },
         data: { cityId: 'city-2' },
-        include: { city: { include: { country: true } } },
+        include: {
+          city: { include: { country: true } },
+          artists: { include: { artist: true }, orderBy: { artist: { name: 'asc' } } },
+        },
       });
     });
 
@@ -271,7 +407,10 @@ describe('FanProfilesService', () => {
       expect(prisma.fanProfile.update).toHaveBeenCalledWith({
         where: { id: createdFanProfile.id },
         data: { showOnMap: true },
-        include: { city: { include: { country: true } } },
+        include: {
+          city: { include: { country: true } },
+          artists: { include: { artist: true }, orderBy: { artist: { name: 'asc' } } },
+        },
       });
     });
 
@@ -285,7 +424,10 @@ describe('FanProfilesService', () => {
       expect(prisma.fanProfile.update).toHaveBeenCalledWith({
         where: { id: createdFanProfile.id },
         data: { displayName: 'New Name', showOnMap: true },
-        include: { city: { include: { country: true } } },
+        include: {
+          city: { include: { country: true } },
+          artists: { include: { artist: true }, orderBy: { artist: { name: 'asc' } } },
+        },
       });
     });
 
@@ -310,7 +452,7 @@ describe('FanProfilesService', () => {
     });
 
     // Caso 12 & 13: la respuesta mantiene el shape de GET, sin email ni userId.
-    it('returns a response without email or userId, including city and country', async () => {
+    it('returns a response without email or userId, including city, country and artists', async () => {
       const result = await service.update(createdFanProfile.id, {
         displayName: 'New Name',
       });
@@ -328,9 +470,83 @@ describe('FanProfilesService', () => {
           longitude: city.longitude,
           country: { id: 'country-1', name: 'Argentina', code: 'AR' },
         },
+        artists: [
+          { id: artistA.id, name: artistA.name, slug: artistA.slug, imageUrl: artistA.imageUrl },
+        ],
       });
       expect(result).not.toHaveProperty('userId');
       expect(result).not.toHaveProperty('email');
+    });
+  });
+
+  describe('update with artistIds', () => {
+    it('validates that all artistIds exist before mutating anything', async () => {
+      prisma.artist.findMany.mockResolvedValue([artistA]);
+
+      await expect(
+        service.update(createdFanProfile.id, {
+          artistIds: [artistA.id, 'missing-artist'],
+        }),
+      ).rejects.toThrow(BadRequestException);
+
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+      expect(tx.fanArtist.deleteMany).not.toHaveBeenCalled();
+      expect(tx.fanArtist.createMany).not.toHaveBeenCalled();
+    });
+
+    it('replaces the FanArtist rows inside a transaction', async () => {
+      prisma.artist.findMany.mockResolvedValue([artistB]);
+
+      await service.update(createdFanProfile.id, { artistIds: [artistB.id] });
+
+      expect(prisma.$transaction).toHaveBeenCalled();
+      expect(tx.fanArtist.deleteMany).toHaveBeenCalledWith({
+        where: { fanProfileId: createdFanProfile.id },
+      });
+      expect(tx.fanArtist.createMany).toHaveBeenCalledWith({
+        data: [{ fanProfileId: createdFanProfile.id, artistId: artistB.id }],
+      });
+      expect(tx.fanProfile.update).toHaveBeenCalledWith({
+        where: { id: createdFanProfile.id },
+        data: {},
+        include: {
+          city: { include: { country: true } },
+          artists: { include: { artist: true }, orderBy: { artist: { name: 'asc' } } },
+        },
+      });
+    });
+
+    it('clears all associations when artistIds is an empty array', async () => {
+      await service.update(createdFanProfile.id, { artistIds: [] });
+
+      expect(prisma.artist.findMany).not.toHaveBeenCalled();
+      expect(tx.fanArtist.deleteMany).toHaveBeenCalledWith({
+        where: { fanProfileId: createdFanProfile.id },
+      });
+      expect(tx.fanArtist.createMany).not.toHaveBeenCalled();
+    });
+
+    it('deduplicates repeated artistIds before validating and replacing', async () => {
+      prisma.artist.findMany.mockResolvedValue([artistB]);
+
+      await service.update(createdFanProfile.id, {
+        artistIds: [artistB.id, artistB.id],
+      });
+
+      expect(prisma.artist.findMany).toHaveBeenCalledWith({
+        where: { id: { in: [artistB.id] } },
+        select: { id: true },
+      });
+      expect(tx.fanArtist.createMany).toHaveBeenCalledWith({
+        data: [{ fanProfileId: createdFanProfile.id, artistId: artistB.id }],
+      });
+    });
+
+    it('leaves existing associations untouched when artistIds is not sent', async () => {
+      await service.update(createdFanProfile.id, { displayName: 'New Name' });
+
+      expect(tx.fanArtist.deleteMany).not.toHaveBeenCalled();
+      expect(tx.fanArtist.createMany).not.toHaveBeenCalled();
     });
   });
 
@@ -341,7 +557,10 @@ describe('FanProfilesService', () => {
 
       expect(prisma.fanProfile.findMany).toHaveBeenCalledWith({
         where: {},
-        include: { city: { include: { country: true } } },
+        include: {
+          city: { include: { country: true } },
+          artists: { include: { artist: true }, orderBy: { artist: { name: 'asc' } } },
+        },
       });
       expect(result).toHaveLength(2);
     });
@@ -355,7 +574,10 @@ describe('FanProfilesService', () => {
           showOnMap: true,
           city: { latitude: { not: null }, longitude: { not: null } },
         },
-        include: { city: { include: { country: true } } },
+        include: {
+          city: { include: { country: true } },
+          artists: { include: { artist: true }, orderBy: { artist: { name: 'asc' } } },
+        },
       });
     });
 
@@ -365,7 +587,10 @@ describe('FanProfilesService', () => {
 
       expect(prisma.fanProfile.findMany).toHaveBeenCalledWith({
         where: { showOnMap: false },
-        include: { city: { include: { country: true } } },
+        include: {
+          city: { include: { country: true } },
+          artists: { include: { artist: true }, orderBy: { artist: { name: 'asc' } } },
+        },
       });
     });
 
@@ -375,7 +600,10 @@ describe('FanProfilesService', () => {
 
       expect(prisma.fanProfile.findMany).toHaveBeenCalledWith({
         where: {},
-        include: { city: { include: { country: true } } },
+        include: {
+          city: { include: { country: true } },
+          artists: { include: { artist: true }, orderBy: { artist: { name: 'asc' } } },
+        },
       });
     });
 
@@ -391,7 +619,10 @@ describe('FanProfilesService', () => {
           showOnMap: true,
           city: { latitude: { not: null }, longitude: { not: null } },
         },
-        include: { city: { include: { country: true } } },
+        include: {
+          city: { include: { country: true } },
+          artists: { include: { artist: true }, orderBy: { artist: { name: 'asc' } } },
+        },
       });
       expect(result).toEqual([]);
     });
@@ -421,12 +652,15 @@ describe('FanProfilesService', () => {
             longitude: city.longitude,
             country: { id: 'country-1', name: 'Argentina', code: 'AR' },
           },
+          artists: [
+            { id: artistA.id, name: artistA.name, slug: artistA.slug, imageUrl: artistA.imageUrl },
+          ],
         },
       ]);
     });
 
-    // Mapea correctamente city/country para cada perfil.
-    it('maps city and country correctly for each profile', async () => {
+    // Mapea correctamente city/country/artists para cada perfil.
+    it('maps city, country and artists correctly for each profile', async () => {
       const result = await service.findAll({});
 
       expect(result).toEqual([
@@ -443,6 +677,9 @@ describe('FanProfilesService', () => {
             longitude: city.longitude,
             country: { id: 'country-1', name: 'Argentina', code: 'AR' },
           },
+          artists: [
+            { id: artistA.id, name: artistA.name, slug: artistA.slug, imageUrl: artistA.imageUrl },
+          ],
         },
         {
           id: secondFanProfile.id,
@@ -457,6 +694,7 @@ describe('FanProfilesService', () => {
             longitude: secondFanProfile.city.longitude,
             country: { id: 'country-1', name: 'Argentina', code: 'AR' },
           },
+          artists: [],
         },
       ]);
     });

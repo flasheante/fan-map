@@ -1,4 +1,5 @@
 import {
+  IsArray,
   IsBoolean,
   IsNotEmpty,
   IsOptional,
@@ -21,4 +22,9 @@ export class UpdateFanProfileDto {
   @IsOptional()
   @IsBoolean()
   showOnMap?: boolean;
+
+  @IsOptional()
+  @IsArray()
+  @IsUUID('4', { each: true })
+  artistIds?: string[];
 }
