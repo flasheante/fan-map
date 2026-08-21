@@ -2,6 +2,7 @@ import { NotFoundException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { PrismaService } from '../database/prisma.service';
 import { SetlistFmClient } from '../integrations/setlist-fm/setlist-fm.client';
+import { SetlistFmApiError } from '../integrations/setlist-fm/setlist-fm.errors';
 import { SetlistFmSetlist } from '../integrations/setlist-fm/setlist-fm.types';
 import {
   SetlistFmSyncService,
@@ -142,6 +143,57 @@ describe('SetlistFmSyncService', () => {
       2,
     );
     expect(summary.fetched).toBe(2);
+  });
+
+  it('makes exactly one HTTP request per page, with no extra/duplicate page fetched once every item is in', async () => {
+    // 45 setlists at 20 items/page (setlist.fm's real page size) means 3
+    // pages: two full ones and a partial last one. The loop must stop right
+    // there — it must not issue a 4th request "to make sure" the last page
+    // was empty, since `total` already tells it there's nothing left.
+    const fullPage = Array.from({ length: 20 }, (_, i) =>
+      externalSetlist({ id: `ext-${i}` }),
+    );
+    const lastPage = Array.from({ length: 5 }, (_, i) =>
+      externalSetlist({ id: `ext-tail-${i}` }),
+    );
+    client.getArtistSetlists
+      .mockResolvedValueOnce(page(fullPage, 45))
+      .mockResolvedValueOnce(page(fullPage, 45))
+      .mockResolvedValueOnce(page(lastPage, 45));
+
+    const summary = await service.syncTheWarning();
+
+    expect(client.getArtistSetlists).toHaveBeenCalledTimes(3);
+    expect(summary.fetched).toBe(45);
+  });
+
+  it('stops paginating immediately and persists nothing when a later page returns 429', async () => {
+    // Page 1 succeeds (and would, on its own, need a page 2 to reach
+    // `total`), page 2 is rate-limited. The sync must not attempt a 3rd
+    // request, must not retry page 2, and must not persist the page-1 show
+    // it already fetched before the failure.
+    const rateLimitError = new SetlistFmApiError(
+      429,
+      'setlist.fm request failed with status 429: Too Many Requests',
+    );
+    client.getArtistSetlists
+      .mockResolvedValueOnce(page([externalSetlist({ id: 'ext-1' })], 2))
+      .mockRejectedValueOnce(rateLimitError);
+
+    await expect(service.syncTheWarning()).rejects.toBe(rateLimitError);
+
+    expect(client.getArtistSetlists).toHaveBeenCalledTimes(2);
+    expect(client.getArtistSetlists).toHaveBeenNthCalledWith(
+      1,
+      THE_WARNING_SETLIST_FM_MBID,
+      1,
+    );
+    expect(client.getArtistSetlists).toHaveBeenNthCalledWith(
+      2,
+      THE_WARNING_SETLIST_FM_MBID,
+      2,
+    );
+    expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 
   it('creates a new show when none exists for the external id', async () => {

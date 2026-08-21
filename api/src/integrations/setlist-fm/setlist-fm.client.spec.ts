@@ -151,6 +151,29 @@ describe('SetlistFmClient', () => {
     expect((error as SetlistFmApiError).status).toBe(404);
   });
 
+  it('throws SetlistFmApiError with status 429 when setlist.fm rate-limits the request, without retrying', async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse(
+        { message: 'Too Many Requests' },
+        { ok: false, status: 429 },
+      ),
+    );
+    const client = new SetlistFmClient({
+      apiKey: 'test-key',
+      baseUrl: 'https://api.setlist.fm/rest/1.0',
+    });
+
+    const error = await client
+      .getArtistSetlists('artist-mbid')
+      .catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(SetlistFmApiError);
+    expect((error as SetlistFmApiError).status).toBe(429);
+    // The client itself has no retry/backoff logic: one 429 means one fetch
+    // call. Any retrying is (currently) the caller's problem, if anyone's.
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
   it('throws SetlistFmInvalidResponseError when the response body has no setlist array', async () => {
     fetchMock.mockResolvedValue(
       jsonResponse({ total: 0, page: 1, itemsPerPage: 20 }),
