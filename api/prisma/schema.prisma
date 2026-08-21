@@ -113,14 +113,23 @@ model FanArtist {
 // A concert performance by an Artist in a City. Not artist-specific (any
 // Artist can have Shows); today only The Warning has seeded/entered data.
 // Setlist is optional: a Show can exist before its setlist is known.
+//
+// externalId links a Show to the setlist.fm entry it was synced from (see
+// SetlistFmSyncService). setlist.fm's setlist `id` is globally unique across
+// their whole database (it identifies one concert event, stable across
+// edits — see https://api.setlist.fm/docs/1.0/json_Setlist.html), not just
+// unique per artist, so a plain @unique is correct here rather than a
+// composite key. Nullable because manually-entered Shows have no external
+// source.
 model Show {
-  id        String   @id @default(uuid())
-  artistId  String
-  cityId    String
-  date      DateTime
-  venue     String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id         String   @id @default(uuid())
+  artistId   String
+  cityId     String
+  date       DateTime
+  venue      String?
+  externalId String?  @unique
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
   artist  Artist   @relation(fields: [artistId], references: [id])
   city    City     @relation(fields: [cityId], references: [id])
