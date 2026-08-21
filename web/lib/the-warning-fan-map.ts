@@ -16,15 +16,25 @@ export type TheWarningMapData =
 
 // Orquesta el flujo pedido: GET /artists, ubicar "the-warning" por slug (sin
 // hardcodear su UUID) y luego GET /artists/:artistId/fans?onMap=true.
-export async function getTheWarningMapData(): Promise<TheWarningMapData> {
-  let artists: Artist[];
-  try {
-    artists = await getArtists();
-  } catch {
-    return { status: "error" };
+//
+// `artists` es opcional: si se pasa (ver app/artists/the-warning/page.tsx,
+// que lo comparte con getTheWarningShowsData para no duplicar el GET
+// /artists), se usa tal cual en lugar de volver a pedirlo.
+export async function getTheWarningMapData(
+  artists?: Artist[],
+): Promise<TheWarningMapData> {
+  let resolvedArtists: Artist[];
+  if (artists) {
+    resolvedArtists = artists;
+  } else {
+    try {
+      resolvedArtists = await getArtists();
+    } catch {
+      return { status: "error" };
+    }
   }
 
-  const artist = findArtistBySlug(artists, THE_WARNING_SLUG);
+  const artist = findArtistBySlug(resolvedArtists, THE_WARNING_SLUG);
   if (!artist) {
     return { status: "artist-not-found" };
   }

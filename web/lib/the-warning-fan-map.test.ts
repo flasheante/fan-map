@@ -113,4 +113,31 @@ describe("getTheWarningMapData", () => {
 
     expect(result).toEqual({ status: "ok", artist, fans: [] });
   });
+
+  // Página /artists/the-warning: comparte un único GET /artists entre
+  // getTheWarningMapData y getTheWarningShowsData en lugar de que cada una
+  // lo pida por separado (ver app/artists/the-warning/page.tsx).
+  describe("when an artists list is provided", () => {
+    it("uses it instead of calling getArtists", async () => {
+      const artist = makeArtist({ slug: THE_WARNING_SLUG });
+      const fans = [makeFan()];
+      getArtistFans.mockResolvedValue({ artist, fans });
+
+      const result = await getTheWarningMapData([artist]);
+
+      expect(getArtists).not.toHaveBeenCalled();
+      expect(getArtistFans).toHaveBeenCalledWith(artist.id);
+      expect(result).toEqual({ status: "ok", artist, fans });
+    });
+
+    it("returns artist-not-found from the given list without calling getArtists", async () => {
+      const result = await getTheWarningMapData([
+        makeArtist({ slug: "other-band" }),
+      ]);
+
+      expect(getArtists).not.toHaveBeenCalled();
+      expect(getArtistFans).not.toHaveBeenCalled();
+      expect(result).toEqual({ status: "artist-not-found" });
+    });
+  });
 });

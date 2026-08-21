@@ -1,16 +1,22 @@
 import Link from "next/link";
+import { ShowsList } from "@/components/artists/shows-list";
 import { FanMapLoader } from "@/components/map/fan-map-loader";
+import { getArtists } from "@/lib/api";
 import { getTheWarningMapData } from "@/lib/the-warning-fan-map";
+import { getTheWarningShowsData } from "@/lib/the-warning-shows";
 
-// Página pública de The Warning. Reutiliza getTheWarningMapData (mismo
-// resolutor por slug que usa /map): GET /artists, buscar "the-warning" por
-// slug y luego GET /artists/:artistId/fans?onMap=true. Vive en una ruta
-// estática por ahora (sin [slug] genérico) hasta que haya más de un artista
-// que la necesite.
+// Página pública de The Warning. Pide GET /artists una sola vez acá y
+// comparte el resultado con getTheWarningMapData y getTheWarningShowsData
+// (mismo resolutor por slug que usa /map, sin hardcodear su UUID) para que
+// no lo vuelva a pedir cada una por su cuenta; luego GET
+// /artists/:artistId/fans?onMap=true y GET /artists/:artistId/shows corren
+// en paralelo. Vive en una ruta estática por ahora (sin [slug] genérico)
+// hasta que haya más de un artista que la necesite.
 export default async function TheWarningArtistPage() {
-  const data = await getTheWarningMapData();
-
-  if (data.status === "error") {
+  let artists;
+  try {
+    artists = await getArtists();
+  } catch {
     return (
       <main className="flex h-screen w-full items-center justify-center">
         <p>
@@ -21,7 +27,26 @@ export default async function TheWarningArtistPage() {
     );
   }
 
-  if (data.status === "artist-not-found") {
+  const [mapData, showsData] = await Promise.all([
+    getTheWarningMapData(artists),
+    getTheWarningShowsData(artists),
+  ]);
+
+  if (mapData.status === "error" || showsData.status === "error") {
+    return (
+      <main className="flex h-screen w-full items-center justify-center">
+        <p>
+          No pudimos cargar la página del artista. Intentá de nuevo más
+          tarde.
+        </p>
+      </main>
+    );
+  }
+
+  if (
+    mapData.status === "artist-not-found" ||
+    showsData.status === "artist-not-found"
+  ) {
     return (
       <main className="flex h-screen w-full items-center justify-center">
         <p>No se encontró el artista.</p>
@@ -29,7 +54,8 @@ export default async function TheWarningArtistPage() {
     );
   }
 
-  const { artist, fans } = data;
+  const { artist, fans } = mapData;
+  const { shows } = showsData;
 
   return (
     <main className="flex h-screen w-full flex-col">
@@ -66,6 +92,12 @@ export default async function TheWarningArtistPage() {
           primero!
         </p>
       )}
+      <section className="max-h-64 overflow-y-auto border-t">
+        <h2 className="px-4 pt-3 text-sm font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+          Shows
+        </h2>
+        <ShowsList shows={shows} />
+      </section>
     </main>
   );
 }

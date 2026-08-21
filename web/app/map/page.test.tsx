@@ -62,11 +62,29 @@ describe("MapPage", () => {
     expect(screen.queryByTestId("fan-map-loader")).not.toBeInTheDocument();
   });
 
+  it("offers a way back to the artist page when the data could not be loaded", async () => {
+    await renderPage({ status: "error" });
+
+    expect(
+      screen.getByRole("link", { name: /volver a the warning/i }),
+    ).toHaveAttribute("href", "/artists/the-warning");
+  });
+
   it("shows a not-found message when The Warning is not in the artists list", async () => {
     await renderPage({ status: "artist-not-found" });
 
-    expect(screen.getByText(/the warning/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/no se encontró el artista the warning/i),
+    ).toBeInTheDocument();
     expect(screen.queryByTestId("fan-map-loader")).not.toBeInTheDocument();
+  });
+
+  it("offers a way back to the artist page when The Warning is not found", async () => {
+    await renderPage({ status: "artist-not-found" });
+
+    expect(
+      screen.getByRole("link", { name: /volver a the warning/i }),
+    ).toHaveAttribute("href", "/artists/the-warning");
   });
 
   it("renders the fan count and the map when the data loads with fans", async () => {
@@ -90,5 +108,21 @@ describe("MapPage", () => {
 
     expect(screen.getByText(/0 fans en el mapa/i)).toBeInTheDocument();
     expect(screen.getByTestId("fan-map-loader")).toBeInTheDocument();
+  });
+
+  it("offers a way back to the artist page on success", async () => {
+    await renderPage({ status: "ok", artist, fans: [] });
+
+    expect(
+      screen.getByRole("link", { name: /volver a the warning/i }),
+    ).toHaveAttribute("href", "/artists/the-warning");
+  });
+
+  it("wraps the header on narrow viewports instead of overflowing", async () => {
+    await renderPage({ status: "ok", artist, fans: [] });
+
+    expect(screen.getByRole("heading").parentElement).toHaveClass(
+      "flex-wrap",
+    );
   });
 });

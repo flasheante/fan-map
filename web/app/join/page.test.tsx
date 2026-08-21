@@ -16,4 +16,12 @@ describe("JoinPage", () => {
     ).toBeInTheDocument();
     expect(screen.getByTestId("fan-form")).toBeInTheDocument();
   });
+
+  it("renders a way back to the artist page", () => {
+    render(<JoinPage />);
+
+    expect(
+      screen.getByRole("link", { name: /volver a the warning/i }),
+    ).toHaveAttribute("href", "/artists/the-warning");
+  });
 });

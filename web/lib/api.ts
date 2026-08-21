@@ -37,6 +37,30 @@ export interface ArtistFansResponse {
   fans: ArtistFan[];
 }
 
+// Shape devuelto por GET /artists/:artistId/shows (ver ShowsController /
+// toShowResponse): venue puede ser null cuando todavía no se cargó.
+export interface ArtistShow {
+  id: string;
+  date: string;
+  venue: string | null;
+  createdAt: string;
+  updatedAt: string;
+  city: City;
+}
+
+// Shape devuelto por GET /artists/:artistId/shows/:showId/setlist (ver
+// ShowsService.findSetlist / toSongResponse).
+export interface SetlistSong {
+  id: string;
+  position: number;
+  title: string;
+}
+
+export interface ShowSetlist {
+  showId: string;
+  songs: SetlistSong[];
+}
+
 // Shape devuelto por GET /countries/:countryId/cities (ver
 // CitiesController): la ciudad "plana", sin el país anidado que sí trae
 // ArtistFan.city / FanProfile.city.
@@ -143,6 +167,62 @@ export async function getArtistFans(
 
   if (!res.ok) {
     throw new Error(`Failed to fetch fans for artist ${artistId}: ${res.status}`);
+  }
+
+  return res.json();
+}
+
+export async function getArtistShows(artistId: string): Promise<ArtistShow[]> {
+  const res = await fetch(`${API_URL}/artists/${artistId}/shows`, {
+    cache: "no-store",
+  });
+
+  if (!res.ok) {
+    throw new Error(`Failed to fetch shows for artist ${artistId}: ${res.status}`);
+  }
+
+  return res.json();
+}
+
+// Adjunta el status HTTP al Error (a diferencia del resto de funciones de
+// este archivo) para que getTheWarningShowData pueda distinguir un show
+// inexistente / de otro artista (404) de otros fallos (red, 5xx).
+function httpError(message: string, status: number): Error {
+  return Object.assign(new Error(message), { status });
+}
+
+export async function getArtistShow(
+  artistId: string,
+  showId: string,
+): Promise<ArtistShow> {
+  const res = await fetch(`${API_URL}/artists/${artistId}/shows/${showId}`, {
+    cache: "no-store",
+  });
+
+  if (!res.ok) {
+    throw httpError(
+      `Failed to fetch show ${showId} for artist ${artistId}: ${res.status}`,
+      res.status,
+    );
+  }
+
+  return res.json();
+}
+
+export async function getShowSetlist(
+  artistId: string,
+  showId: string,
+): Promise<ShowSetlist> {
+  const res = await fetch(
+    `${API_URL}/artists/${artistId}/shows/${showId}/setlist`,
+    { cache: "no-store" },
+  );
+
+  if (!res.ok) {
+    throw httpError(
+      `Failed to fetch setlist for show ${showId}: ${res.status}`,
+      res.status,
+    );
   }
 
   return res.json();

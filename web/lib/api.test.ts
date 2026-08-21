@@ -2,9 +2,12 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   createFanProfile,
   getArtistFans,
+  getArtistShow,
+  getArtistShows,
   getArtists,
   getCities,
   getCountries,
+  getShowSetlist,
 } from "./api";
 
 function jsonResponse(body: unknown, ok = true, status = 200) {
@@ -85,6 +88,132 @@ describe("getArtistFans", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     await expect(getArtistFans("missing-id")).rejects.toThrow(/404/);
+  });
+});
+
+describe("getArtistShows", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("fetches GET /artists/:artistId/shows and returns the parsed list", async () => {
+    const shows = [
+      {
+        id: "show-1",
+        date: "2026-06-01T00:00:00.000Z",
+        venue: "Foro Sol",
+        createdAt: "2026-01-01T00:00:00.000Z",
+        updatedAt: "2026-01-01T00:00:00.000Z",
+        city: {
+          id: "city-1",
+          name: "Monterrey",
+          latitude: 25.6866,
+          longitude: -100.3161,
+          country: { id: "country-1", name: "Mexico", code: "MX" },
+        },
+      },
+    ];
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(shows));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await getArtistShows("artist-1");
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringMatching(/\/artists\/artist-1\/shows$/),
+      expect.objectContaining({ cache: "no-store" }),
+    );
+    expect(result).toEqual(shows);
+  });
+
+  it("throws when the response is not ok", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(null, false, 404));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(getArtistShows("missing-id")).rejects.toThrow(/404/);
+  });
+});
+
+describe("getArtistShow", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("fetches GET /artists/:artistId/shows/:showId and returns the parsed show", async () => {
+    const show = {
+      id: "show-1",
+      date: "2026-06-01T00:00:00.000Z",
+      venue: "Foro Sol",
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z",
+      city: {
+        id: "city-1",
+        name: "Monterrey",
+        latitude: 25.6866,
+        longitude: -100.3161,
+        country: { id: "country-1", name: "Mexico", code: "MX" },
+      },
+    };
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(show));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await getArtistShow("artist-1", "show-1");
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringMatching(/\/artists\/artist-1\/shows\/show-1$/),
+      expect.objectContaining({ cache: "no-store" }),
+    );
+    expect(result).toEqual(show);
+  });
+
+  it("throws an error carrying the HTTP status when the response is not ok", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(null, false, 404));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(getArtistShow("artist-1", "missing-show")).rejects.toThrow(/404/);
+
+    let caught: unknown;
+    try {
+      await getArtistShow("artist-1", "missing-show");
+    } catch (err) {
+      caught = err;
+    }
+    expect(caught).toMatchObject({ status: 404 });
+  });
+});
+
+describe("getShowSetlist", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("fetches GET /artists/:artistId/shows/:showId/setlist and returns the parsed setlist", async () => {
+    const setlist = {
+      showId: "show-1",
+      songs: [{ id: "song-1", position: 1, title: "Choke" }],
+    };
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(setlist));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await getShowSetlist("artist-1", "show-1");
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringMatching(/\/artists\/artist-1\/shows\/show-1\/setlist$/),
+      expect.objectContaining({ cache: "no-store" }),
+    );
+    expect(result).toEqual(setlist);
+  });
+
+  it("throws an error carrying the HTTP status when the response is not ok", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(null, false, 404));
+    vi.stubGlobal("fetch", fetchMock);
+
+    let caught: unknown;
+    try {
+      await getShowSetlist("artist-1", "missing-show");
+    } catch (err) {
+      caught = err;
+    }
+    expect(caught).toMatchObject({ status: 404 });
   });
 });
 
