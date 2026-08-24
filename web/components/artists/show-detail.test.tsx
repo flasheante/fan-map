@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import type { Artist, ArtistShow } from "@/lib/api";
 import { ShowDetail } from "./show-detail";
 
@@ -45,7 +45,11 @@ describe("ShowDetail", () => {
   it("shows the date", () => {
     render(<ShowDetail artist={makeArtist()} show={makeShow()} />);
 
-    expect(screen.getByText(/1 de junio de 2026/i)).toBeInTheDocument();
+    // getAllByText: la fecha también aparece como paso actual del
+    // breadcrumb (ver "renders the tour breadcrumbs..." más abajo).
+    expect(
+      screen.getAllByText(/1 de junio de 2026/i).length,
+    ).toBeGreaterThan(0);
   });
 
   it("shows the venue", () => {
@@ -59,7 +63,9 @@ describe("ShowDetail", () => {
   it("shows the city", () => {
     render(<ShowDetail artist={makeArtist()} show={makeShow()} />);
 
-    expect(screen.getByText(/monterrey/i)).toBeInTheDocument();
+    // getAllByText: la ciudad también aparece como link del breadcrumb
+    // (ver "renders the tour breadcrumbs..." más abajo).
+    expect(screen.getAllByText(/monterrey/i).length).toBeGreaterThan(0);
   });
 
   it("shows the country", () => {
@@ -74,11 +80,37 @@ describe("ShowDetail", () => {
     expect(screen.getByText(/venue a confirmar/i)).toBeInTheDocument();
   });
 
-  it("renders a link back to the artist page", () => {
-    render(<ShowDetail artist={makeArtist()} show={makeShow()} />);
+  it("renders the tour breadcrumbs, linking back to the artist, the tour history and the city", () => {
+    const show = makeShow();
+    render(<ShowDetail artist={makeArtist()} show={show} />);
 
-    const backLink = screen.getByRole("link");
-    expect(backLink).toHaveAttribute("href", "/artists/the-warning");
+    const nav = screen.getByRole("navigation", { name: /breadcrumb/i });
+    expect(
+      within(nav).getByRole("link", { name: "The Warning" }),
+    ).toHaveAttribute("href", "/artists/the-warning");
+    expect(
+      within(nav).getByRole("link", { name: "Historial de shows" }),
+    ).toHaveAttribute("href", "/artists/the-warning/tour");
+    expect(
+      within(nav).getByRole("link", { name: "Monterrey" }),
+    ).toHaveAttribute("href", `/artists/the-warning/tour/${show.city.id}`);
+    expect(
+      within(nav).getByText(/1 de junio de 2026/i),
+    ).toHaveAttribute("aria-current", "page");
+  });
+
+  it("falls back to a plain breadcrumb when the show has no city, without breaking", () => {
+    const show = makeShow({ city: undefined as unknown as ArtistShow["city"] });
+    render(<ShowDetail artist={makeArtist()} show={show} />);
+
+    const nav = screen.getByRole("navigation", { name: /breadcrumb/i });
+    expect(
+      within(nav).getByRole("link", { name: "The Warning" }),
+    ).toHaveAttribute("href", "/artists/the-warning");
+    expect(within(nav).getByText("Show")).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
   });
 
   it("doesn't render any internal id", () => {

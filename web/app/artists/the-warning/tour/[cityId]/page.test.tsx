@@ -152,4 +152,25 @@ describe("TheWarningTourCityPage", () => {
       "The Warning — Mendoza — 2 shows",
     );
   });
+
+  // TourCityHistory es quien arma el breadcrumb The Warning / Historial de
+  // shows / <ciudad> (ver tour-city-history.test.tsx para su cobertura);
+  // esta page test sólo verifica que le llega el artist y la ciudad
+  // resueltos por getTheWarningTourCityData, sin requests adicionales.
+  it("passes the artist and city to TourCityHistory so it can build the breadcrumb", async () => {
+    const artist = makeArtist({ name: "The Warning" });
+    const city = makeCity({ name: "Buenos Aires" });
+
+    await renderPage(city.id, {
+      status: "ok",
+      artist,
+      city,
+      shows: [makeShow()],
+    });
+
+    expect(screen.getByTestId("tour-city-history")).toHaveTextContent(
+      "The Warning — Buenos Aires",
+    );
+    expect(getTheWarningTourCityData).toHaveBeenCalledTimes(1);
+  });
 });

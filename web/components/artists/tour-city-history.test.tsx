@@ -148,17 +148,33 @@ describe("TourCityHistory", () => {
     );
 
     expect(screen.getByText(/todavía no hay shows/i)).toBeInTheDocument();
-    expect(screen.queryAllByRole("listitem")).toHaveLength(0);
+    // Sin shows, ShowsList no debe listar ningún link de detalle de show
+    // (los <li> del breadcrumb son un elemento distinto y sí siguen
+    // presentes).
+    const showLinks = screen
+      .queryAllByRole("link")
+      .filter((link) => link.getAttribute("href")?.includes("/shows/"));
+    expect(showLinks).toHaveLength(0);
   });
 
-  it("offers a way back to the Tour Map", () => {
+  it("renders the tour breadcrumbs, linking back to the artist and the tour history", () => {
     render(
       <TourCityHistory artist={makeArtist()} city={makeCity()} shows={[]} />,
     );
 
     expect(
-      screen.getByRole("link", { name: /volver al tour map/i }),
+      screen.getByRole("navigation", { name: /breadcrumb/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "The Warning" }),
+    ).toHaveAttribute("href", "/artists/the-warning");
+    expect(
+      screen.getByRole("link", { name: "Historial de shows" }),
     ).toHaveAttribute("href", "/artists/the-warning/tour");
+    expect(screen.getByText("Mendoza")).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
   });
 
   it("does not render internal UUIDs as visible text", () => {

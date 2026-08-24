@@ -176,12 +176,19 @@ describe("TourMapPage", () => {
     );
   });
 
-  it("offers a way back to the artist page on success", async () => {
+  it("renders the tour breadcrumbs on success, linking back to the artist page", async () => {
     await renderPage({ status: "ok", artist, cities: [], shows: [] });
 
     expect(
-      screen.getByRole("link", { name: /volver a the warning/i }),
+      screen.getByRole("navigation", { name: /breadcrumb/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "The Warning" }),
     ).toHaveAttribute("href", "/artists/the-warning");
+    expect(screen.getByText("Historial de shows")).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
   });
 
   it("renders the tour stats summary computed from the shows returned by getTheWarningTourMapData", async () => {

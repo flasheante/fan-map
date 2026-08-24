@@ -1,4 +1,5 @@
 import { BackToTheWarningLink } from "@/components/artists/back-link";
+import { TourBreadcrumbs } from "@/components/artists/tour-breadcrumbs";
 import { TourMapLoader } from "@/components/artists/tour-map-loader";
 import { TourStats } from "@/components/artists/tour-stats";
 import { getTheWarningTourMapData } from "@/lib/the-warning-tour-map";
@@ -39,7 +40,7 @@ export default async function TourMapPage() {
   return (
     <main className="flex h-screen w-full flex-col overflow-y-auto">
       <div className="border-b px-4 py-2">
-        <BackToTheWarningLink />
+        <TourBreadcrumbs level="tour" artistName={artist.name} />
       </div>
       <header className="flex flex-wrap items-center justify-between gap-4 border-b px-4 py-3">
         <h1 className="text-lg font-semibold">{artist.name} Tour Map</h1>

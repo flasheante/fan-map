@@ -16,10 +16,15 @@ const { getTheWarningShowData } = vi.hoisted(() => ({
 
 vi.mock("@/lib/the-warning-show", () => ({ getTheWarningShowData }));
 
+// El mock expone show.city (no sólo artist/venue) porque ShowDetail es
+// quien arma el breadcrumb The Warning / Historial de shows / <ciudad> /
+// <fecha> a partir de esos mismos datos del show (ver show-detail.test.tsx
+// para la cobertura del breadcrumb en sí); esta page test sólo verifica que
+// le llegan completos, sin requests adicionales.
 vi.mock("@/components/artists/show-detail", () => ({
   ShowDetail: ({ artist, show }: { artist: Artist; show: ArtistShow }) => (
     <div data-testid="show-detail">
-      {artist.name} — {show.venue}
+      {artist.name} — {show.venue} — {show.city?.name ?? "sin ciudad"}
     </div>
   ),
 }));
@@ -144,5 +149,24 @@ describe("TheWarningShowPage", () => {
       "The Warning — Foro Sol",
     );
     expect(screen.getByTestId("setlist")).toHaveTextContent("1 songs");
+  });
+
+  it("passes the show's city to ShowDetail so it can build the breadcrumb, without an extra request", async () => {
+    const artist = makeArtist();
+    const show = makeShow({
+      city: {
+        id: "city-1",
+        name: "Monterrey",
+        latitude: 25.6866,
+        longitude: -100.3161,
+        country: { id: "country-1", name: "Mexico", code: "MX" },
+      },
+    });
+    const setlist = { showId: show.id, songs: [] };
+
+    await renderPage(show.id, { status: "ok", artist, show, setlist });
+
+    expect(screen.getByTestId("show-detail")).toHaveTextContent("Monterrey");
+    expect(getTheWarningShowData).toHaveBeenCalledTimes(1);
   });
 });
