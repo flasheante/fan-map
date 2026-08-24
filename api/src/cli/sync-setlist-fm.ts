@@ -26,8 +26,12 @@ async function main() {
   });
 
   try {
+    console.log('Starting Setlist.fm sync for The Warning');
+
     const syncService = app.get(SetlistFmSyncService);
-    const summary = await syncService.syncTheWarning();
+    const summary = await syncService.syncTheWarning({
+      onPageFetchStart: (page) => console.log(`Fetching page ${page}...`),
+    });
 
     console.log('setlist.fm sync completed:');
     console.log(JSON.stringify(summary, null, 2));
@@ -44,8 +48,13 @@ async function main() {
 
 main()
   .then(() => process.exit(0))
-  .catch((error) => {
+  .catch((error: unknown) => {
     console.error('setlist.fm sync failed:');
+    // Never log config (e.g. SetlistFmConfigError carries no secret, but we
+    // still only ever log the Error itself, never process.env) — the daily
+    // rate-limit error (see SetlistFmRateLimiter) is a plain Error with a
+    // clear "setlist.fm daily rate limit reached" message, so it surfaces
+    // here just like any other sync failure, with no special-casing needed.
     console.error(error);
     process.exit(1);
   });

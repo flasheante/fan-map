@@ -14,6 +14,14 @@ export const THE_WARNING_SLUG = 'the-warning';
 export const THE_WARNING_SETLIST_FM_MBID =
   '7f625f35-7e53-4f08-9201-16643979484b';
 
+// Optional progress hooks for callers that want to surface what's happening
+// (currently just the CLI — see src/cli/sync-setlist-fm.ts). Purely
+// observational: no hook here changes what gets fetched or persisted, and
+// the default {} means existing callers/tests see no behaviour change.
+export interface SetlistFmSyncProgress {
+  onPageFetchStart?: (page: number) => void;
+}
+
 export interface SetlistFmSyncSummary {
   fetched: number;
   created: number;
@@ -49,7 +57,9 @@ export class SetlistFmSyncService {
     private readonly client: SetlistFmClient,
   ) {}
 
-  async syncTheWarning(): Promise<SetlistFmSyncSummary> {
+  async syncTheWarning(
+    progress: SetlistFmSyncProgress = {},
+  ): Promise<SetlistFmSyncSummary> {
     const artist = await this.prisma.artist.findUnique({
       where: { slug: THE_WARNING_SLUG },
     });
@@ -59,7 +69,7 @@ export class SetlistFmSyncService {
       );
     }
 
-    const externalSetlists = await this.fetchAllSetlists();
+    const externalSetlists = await this.fetchAllSetlists(progress);
 
     const summary: SetlistFmSyncSummary = {
       fetched: externalSetlists.length,
@@ -114,11 +124,19 @@ export class SetlistFmSyncService {
     return summary;
   }
 
-  private async fetchAllSetlists(): Promise<SetlistFmSetlist[]> {
+  // Strictly sequential: each page is only requested after the previous one
+  // has resolved. SetlistFmClient.getArtistSetlists() gates every one of
+  // these calls through SetlistFmRateLimiter.acquire() (see
+  // setlist-fm.client.ts) — this loop doesn't wait or throttle itself, it
+  // just never issues a page N+1 request before page N has returned.
+  private async fetchAllSetlists(
+    progress: SetlistFmSyncProgress,
+  ): Promise<SetlistFmSetlist[]> {
     const all: SetlistFmSetlist[] = [];
     let page = 1;
 
     for (;;) {
+      progress.onPageFetchStart?.(page);
       const response = await this.client.getArtistSetlists(
         THE_WARNING_SETLIST_FM_MBID,
         page,

@@ -6,6 +6,7 @@ import {
   SetlistFmInvalidResponseError,
 } from './setlist-fm.errors';
 import { SetlistFmModule } from './setlist-fm.module';
+import { SetlistFmRateLimiter } from './setlist-fm.rate-limiter';
 import { SetlistFmSetlistsPage } from './setlist-fm.types';
 
 // El cliente solo debe hablar HTTP contra setlist.fm: todo se prueba
@@ -200,5 +201,88 @@ describe('SetlistFmClient', () => {
     const client = moduleRef.get(SetlistFmClient);
 
     expect(client).toBeInstanceOf(SetlistFmClient);
+  });
+
+  // Rate limiting must sit right in front of the real HTTP call, inside the
+  // client itself — see setlist-fm.rate-limiter.spec.ts for the limiter's
+  // own behaviour (2 req/s, 1,440/day). These tests only check the wiring:
+  // the client always asks the limiter first, and never calls fetch() when
+  // the limiter refuses.
+  describe('rate limiting', () => {
+    function fakeRateLimiter(
+      acquire: jest.Mock = jest.fn().mockResolvedValue(undefined),
+    ) {
+      return { acquire } as unknown as SetlistFmRateLimiter;
+    }
+
+    it('calls rateLimiter.acquire() exactly once before making the request', async () => {
+      fetchMock.mockResolvedValue(jsonResponse(page));
+      const acquire = jest.fn().mockResolvedValue(undefined);
+      const client = new SetlistFmClient(
+        { apiKey: 'test-key', baseUrl: 'https://api.setlist.fm/rest/1.0' },
+        fakeRateLimiter(acquire),
+      );
+
+      await client.getArtistSetlists('artist-mbid');
+
+      expect(acquire).toHaveBeenCalledTimes(1);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('calls acquire() once per request, in order, across multiple calls', async () => {
+      fetchMock.mockResolvedValue(jsonResponse(page));
+      const acquire = jest.fn().mockResolvedValue(undefined);
+      const client = new SetlistFmClient(
+        { apiKey: 'test-key', baseUrl: 'https://api.setlist.fm/rest/1.0' },
+        fakeRateLimiter(acquire),
+      );
+
+      await client.getArtistSetlists('artist-mbid', 1);
+      await client.getArtistSetlists('artist-mbid', 2);
+      await client.getArtistSetlists('artist-mbid', 3);
+
+      expect(acquire).toHaveBeenCalledTimes(3);
+      expect(fetchMock).toHaveBeenCalledTimes(3);
+    });
+
+    it('never calls fetch when acquire() rejects because the daily limit was reached', async () => {
+      const dailyLimitError = new Error(
+        'setlist.fm daily rate limit reached: 1440 requests already used.',
+      );
+      const acquire = jest.fn().mockRejectedValue(dailyLimitError);
+      const client = new SetlistFmClient(
+        { apiKey: 'test-key', baseUrl: 'https://api.setlist.fm/rest/1.0' },
+        fakeRateLimiter(acquire),
+      );
+
+      await expect(client.getArtistSetlists('artist-mbid')).rejects.toBe(
+        dailyLimitError,
+      );
+
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it('still throws SetlistFmApiError on a 429 once granted, with no retry', async () => {
+      fetchMock.mockResolvedValue(
+        jsonResponse(
+          { message: 'Too Many Requests' },
+          { ok: false, status: 429 },
+        ),
+      );
+      const acquire = jest.fn().mockResolvedValue(undefined);
+      const client = new SetlistFmClient(
+        { apiKey: 'test-key', baseUrl: 'https://api.setlist.fm/rest/1.0' },
+        fakeRateLimiter(acquire),
+      );
+
+      const error = await client
+        .getArtistSetlists('artist-mbid')
+        .catch((e: unknown) => e);
+
+      expect(error).toBeInstanceOf(SetlistFmApiError);
+      expect((error as SetlistFmApiError).status).toBe(429);
+      expect(acquire).toHaveBeenCalledTimes(1);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
   });
 });
