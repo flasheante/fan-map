@@ -1,13 +1,17 @@
 import { BackToTheWarningLink } from "@/components/artists/back-link";
 import { TourMapLoader } from "@/components/artists/tour-map-loader";
+import { TourStats } from "@/components/artists/tour-stats";
 import { getTheWarningTourMapData } from "@/lib/the-warning-tour-map";
+import { calculateTourStats } from "@/lib/the-warning-tour-stats";
 
 // Tour Map público de The Warning: reutiliza getTheWarningTourMapData
 // (mismo resolutor por slug que /map y /artists/the-warning, sin
 // hardcodear el UUID del artista), que agrupa GET
 // /artists/:artistId/shows por ciudad. Cada marcador es una ciudad, no un
 // show; el popup linkea a /artists/the-warning/shows/:showId, que ya
-// muestra el detalle y el setlist.
+// muestra el detalle y el setlist. El resumen estadístico (TourStats) se
+// calcula con calculateTourStats sobre el mismo `data.shows` que ya trajo
+// getTheWarningTourMapData, sin un segundo GET /artists/:artistId/shows.
 export default async function TourMapPage() {
   const data = await getTheWarningTourMapData();
 
@@ -29,10 +33,11 @@ export default async function TourMapPage() {
     );
   }
 
-  const { artist, cities } = data;
+  const { artist, cities, shows } = data;
+  const stats = calculateTourStats(shows);
 
   return (
-    <main className="flex h-screen w-full flex-col">
+    <main className="flex h-screen w-full flex-col overflow-y-auto">
       <div className="border-b px-4 py-2">
         <BackToTheWarningLink />
       </div>
@@ -42,7 +47,8 @@ export default async function TourMapPage() {
           {cities.length} {cities.length === 1 ? "ciudad" : "ciudades"}
         </p>
       </header>
-      <div className="min-h-0 flex-1">
+      <TourStats stats={stats} />
+      <div className="min-h-[60vh] flex-1">
         <TourMapLoader cities={cities} />
       </div>
       {cities.length === 0 && (

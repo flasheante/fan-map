@@ -206,6 +206,31 @@ describe("TourMap", () => {
     expect(container.textContent).not.toContain(MENDOZA_ID);
   });
 
+  it("links each city to its show history page via a VER HISTORIAL link", () => {
+    const cities = [
+      makeCity({ id: MENDOZA_ID, name: "Mendoza" }),
+      makeCity({
+        id: BUENOS_AIRES_ID,
+        name: "Buenos Aires",
+        latitude: -34.6037,
+        longitude: -58.3816,
+      }),
+    ];
+
+    render(<TourMap cities={cities} />);
+
+    const historyLinks = screen.getAllByRole("link", { name: /ver historial/i });
+    expect(historyLinks).toHaveLength(2);
+    expect(historyLinks[0]).toHaveAttribute(
+      "href",
+      `/artists/the-warning/tour/${MENDOZA_ID}`,
+    );
+    expect(historyLinks[1]).toHaveAttribute(
+      "href",
+      `/artists/the-warning/tour/${BUENOS_AIRES_ID}`,
+    );
+  });
+
   it("centers the map on the single city when there is exactly one", () => {
     const city = makeCity();
     render(<TourMap cities={[city]} />);

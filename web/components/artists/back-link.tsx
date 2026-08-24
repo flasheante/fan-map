@@ -16,3 +16,18 @@ export function BackToTheWarningLink() {
     </Link>
   );
 }
+
+// Enlace de "volver" usado en la página de historial por ciudad
+// (/artists/the-warning/tour/:cityId), incluidos sus estados sin datos
+// (error, artist-not-found, city-not-found): desde ahí tiene más sentido
+// volver al Tour Map que al perfil del artista.
+export function BackToTourMapLink() {
+  return (
+    <Link
+      href="/artists/the-warning/tour"
+      className="text-sm font-medium underline underline-offset-2"
+    >
+      ← Volver al Tour Map
+    </Link>
+  );
+}

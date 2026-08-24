@@ -182,6 +182,24 @@ describe("getTheWarningTourMapData", () => {
     expect(mendozaCity?.shows).toEqual([showA, showB]);
   });
 
+  // La página /artists/the-warning/tour necesita los shows sin agrupar
+  // (ver the-warning-tour-stats.ts) para calcular estadísticas sin volver a
+  // pedir GET /artists/:artistId/shows: el resultado "ok" expone la misma
+  // colección que ya se usó para construir `cities`.
+  it("includes the raw, ungrouped shows list alongside the grouped cities", async () => {
+    const artist = makeArtist({ slug: THE_WARNING_SLUG });
+    const showA = makeShow({ id: "show-a", city: mendoza });
+    const showB = makeShow({ id: "show-b", city: buenosAires });
+    getArtists.mockResolvedValue([artist]);
+    getArtistShows.mockResolvedValue([showA, showB]);
+
+    const result = await getTheWarningTourMapData();
+
+    expect(result.status).toBe("ok");
+    if (result.status !== "ok") throw new Error("unreachable");
+    expect(result.shows).toEqual([showA, showB]);
+  });
+
   it("returns ok with an empty cities array when the artist has no shows", async () => {
     const artist = makeArtist({ slug: THE_WARNING_SLUG });
     getArtists.mockResolvedValue([artist]);
@@ -189,7 +207,7 @@ describe("getTheWarningTourMapData", () => {
 
     const result = await getTheWarningTourMapData();
 
-    expect(result).toEqual({ status: "ok", artist, cities: [] });
+    expect(result).toEqual({ status: "ok", artist, cities: [], shows: [] });
   });
 
   it("returns ok with an empty cities array when no show has a city with coordinates", async () => {
@@ -200,11 +218,20 @@ describe("getTheWarningTourMapData", () => {
       longitude: null as unknown as number,
     };
     getArtists.mockResolvedValue([artist]);
-    getArtistShows.mockResolvedValue([makeShow({ city: cityWithoutCoords })]);
+    const showWithoutCoords = makeShow({ city: cityWithoutCoords });
+    getArtistShows.mockResolvedValue([showWithoutCoords]);
 
     const result = await getTheWarningTourMapData();
 
-    expect(result).toEqual({ status: "ok", artist, cities: [] });
+    // Las estadísticas deben poder contar este show aunque su ciudad no
+    // tenga coordenadas y por eso quede fuera de `cities` (ver
+    // groupShowsByCity), así que `shows` sigue incluyéndolo.
+    expect(result).toEqual({
+      status: "ok",
+      artist,
+      cities: [],
+      shows: [showWithoutCoords],
+    });
   });
 
   // Página /artists/the-warning/tour: comparte un único GET /artists con el
@@ -232,6 +259,7 @@ describe("getTheWarningTourMapData", () => {
             shows: [show],
           },
         ],
+        shows: [show],
       });
     });
 

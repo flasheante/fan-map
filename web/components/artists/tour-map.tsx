@@ -99,6 +99,12 @@ export function TourMap({ cities }: TourMapProps) {
                 {city.shows.length}{" "}
                 {city.shows.length === 1 ? "show" : "shows"}
               </span>
+              <Link
+                href={`/artists/the-warning/tour/${city.id}`}
+                className="text-xs font-semibold uppercase tracking-wide underline underline-offset-2"
+              >
+                Ver historial →
+              </Link>
               <ul className="mt-2 flex flex-col gap-2">
                 {city.shows.map((show) => (
                   <li key={show.id} className="flex flex-col">

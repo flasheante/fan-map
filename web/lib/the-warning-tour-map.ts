@@ -15,7 +15,7 @@ export interface TourCity {
 export type TheWarningTourMapData =
   | { status: "error" }
   | { status: "artist-not-found" }
-  | { status: "ok"; artist: Artist; cities: TourCity[] };
+  | { status: "ok"; artist: Artist; cities: TourCity[]; shows: ArtistShow[] };
 
 // Agrupa los shows por city.id (no por nombre, ver slice): varios shows en
 // la misma ciudad producen un único marcador con todos sus shows. Descarta
@@ -53,7 +53,10 @@ export function groupShowsByCity(shows: ArtistShow[]): TourCity[] {
 // Mismo flujo que getTheWarningShowsData: GET /artists, ubicar "the-warning"
 // por slug (sin hardcodear su UUID, reutilizando THE_WARNING_SLUG /
 // findArtistBySlug) y luego GET /artists/:artistId/shows, agrupando el
-// resultado por ciudad con groupShowsByCity.
+// resultado por ciudad con groupShowsByCity. El resultado "ok" también
+// expone `shows` sin agrupar: tour/page.tsx lo reutiliza para calcular
+// estadísticas (calculateTourStats, en the-warning-tour-stats.ts) sin un
+// segundo GET /artists/:artistId/shows.
 //
 // `artists` es opcional: si se pasa (ver app/artists/the-warning/page.tsx),
 // se usa tal cual en lugar de volver a pedirlo.
@@ -78,7 +81,7 @@ export async function getTheWarningTourMapData(
 
   try {
     const shows = await getArtistShows(artist.id);
-    return { status: "ok", artist, cities: groupShowsByCity(shows) };
+    return { status: "ok", artist, cities: groupShowsByCity(shows), shows };
   } catch {
     return { status: "error" };
   }
