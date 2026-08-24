@@ -1,17 +1,20 @@
 import Link from "next/link";
+import { ArtistStatsSummary } from "@/components/artists/artist-stats";
 import { ShowsList } from "@/components/artists/shows-list";
 import { FanMapLoader } from "@/components/map/fan-map-loader";
 import { getArtists } from "@/lib/api";
 import { getTheWarningMapData } from "@/lib/the-warning-fan-map";
 import { getTheWarningShowsData } from "@/lib/the-warning-shows";
+import { getTheWarningStatsData } from "@/lib/the-warning-stats";
 
 // Página pública de The Warning. Pide GET /artists una sola vez acá y
-// comparte el resultado con getTheWarningMapData y getTheWarningShowsData
-// (mismo resolutor por slug que usa /map, sin hardcodear su UUID) para que
-// no lo vuelva a pedir cada una por su cuenta; luego GET
-// /artists/:artistId/fans?onMap=true y GET /artists/:artistId/shows corren
-// en paralelo. Vive en una ruta estática por ahora (sin [slug] genérico)
-// hasta que haya más de un artista que la necesite.
+// comparte el resultado con getTheWarningMapData, getTheWarningShowsData y
+// getTheWarningStatsData (mismo resolutor por slug que usa /map, sin
+// hardcodear su UUID) para que no lo vuelva a pedir cada una por su cuenta;
+// luego GET /artists/:artistId/fans?onMap=true, GET /artists/:artistId/shows
+// y GET /artists/:artistId/stats corren en paralelo. Vive en una ruta
+// estática por ahora (sin [slug] genérico) hasta que haya más de un artista
+// que la necesite.
 export default async function TheWarningArtistPage() {
   let artists;
   try {
@@ -27,12 +30,17 @@ export default async function TheWarningArtistPage() {
     );
   }
 
-  const [mapData, showsData] = await Promise.all([
+  const [mapData, showsData, statsData] = await Promise.all([
     getTheWarningMapData(artists),
     getTheWarningShowsData(artists),
+    getTheWarningStatsData(artists),
   ]);
 
-  if (mapData.status === "error" || showsData.status === "error") {
+  if (
+    mapData.status === "error" ||
+    showsData.status === "error" ||
+    statsData.status === "error"
+  ) {
     return (
       <main className="flex h-screen w-full items-center justify-center">
         <p>
@@ -45,7 +53,8 @@ export default async function TheWarningArtistPage() {
 
   if (
     mapData.status === "artist-not-found" ||
-    showsData.status === "artist-not-found"
+    showsData.status === "artist-not-found" ||
+    statsData.status === "artist-not-found"
   ) {
     return (
       <main className="flex h-screen w-full items-center justify-center">
@@ -56,6 +65,7 @@ export default async function TheWarningArtistPage() {
 
   const { artist, fans } = mapData;
   const { shows } = showsData;
+  const { stats } = statsData;
 
   return (
     <main className="flex h-screen w-full flex-col">
@@ -83,6 +93,7 @@ export default async function TheWarningArtistPage() {
           Join the FanMap
         </Link>
       </header>
+      <ArtistStatsSummary stats={stats} />
       <div className="min-h-0 flex-1">
         <FanMapLoader fans={fans} />
       </div>

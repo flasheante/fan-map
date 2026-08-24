@@ -63,6 +63,44 @@ export class ArtistsService {
       fans: fans.map(toArtistFanResponse),
     };
   }
+
+  // Estadísticas agregadas de un artista: fans/países/ciudades vienen de los
+  // FanProfiles asociados vía FanArtist (misma relación que findFans, sin el
+  // filtro onMap); shows y songs vienen de los Show del artista y las
+  // SetlistSong de sus Setlists. País y ciudad se deduplican por id, canción
+  // por título (no hay catálogo de Song todavía, ver schema.prisma).
+  async findStats(artistId: string) {
+    const artist = await this.prisma.artist.findUnique({
+      where: { id: artistId },
+    });
+    if (!artist) {
+      throw new NotFoundException(`Artist ${artistId} not found`);
+    }
+
+    const [fans, showsCount, songs] = await Promise.all([
+      this.prisma.fanProfile.findMany({
+        where: { artists: { some: { artistId } } },
+        select: { city: { select: { id: true, countryId: true } } },
+      }),
+      this.prisma.show.count({ where: { artistId } }),
+      this.prisma.setlistSong.findMany({
+        where: { setlist: { show: { artistId } } },
+        select: { title: true },
+      }),
+    ]);
+
+    const cityIds = new Set(fans.map((fan) => fan.city.id));
+    const countryIds = new Set(fans.map((fan) => fan.city.countryId));
+    const songTitles = new Set(songs.map((song) => song.title));
+
+    return {
+      fans: fans.length,
+      countries: countryIds.size,
+      cities: cityIds.size,
+      shows: showsCount,
+      songs: songTitles.size,
+    };
+  }
 }
 
 function toArtistResponse(artist: Artist) {

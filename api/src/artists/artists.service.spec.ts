@@ -8,6 +8,8 @@ describe('ArtistsService', () => {
   let prisma: {
     artist: { findMany: jest.Mock; findUnique: jest.Mock };
     fanProfile: { findMany: jest.Mock };
+    show: { count: jest.Mock };
+    setlistSong: { findMany: jest.Mock };
   };
 
   const theWarning = {
@@ -26,6 +28,12 @@ describe('ArtistsService', () => {
         findUnique: jest.fn().mockResolvedValue(theWarning),
       },
       fanProfile: {
+        findMany: jest.fn().mockResolvedValue([]),
+      },
+      show: {
+        count: jest.fn().mockResolvedValue(0),
+      },
+      setlistSong: {
         findMany: jest.fn().mockResolvedValue([]),
       },
     };
@@ -223,6 +231,114 @@ describe('ArtistsService', () => {
         expect(fan).not.toHaveProperty('email');
         expect(fan).not.toHaveProperty('userId');
       });
+    });
+  });
+
+  describe('findStats', () => {
+    // Fans mínimos para ejercitar la deduplicación: dos fans comparten
+    // exactamente la misma ciudad (city-1, dentro de country-1), un tercero
+    // está en otra ciudad del mismo país (city-2), y un cuarto está en una
+    // ciudad de otro país (city-3, country-2).
+    const fansCityRows = [
+      { city: { id: 'city-1', countryId: 'country-1' } },
+      { city: { id: 'city-1', countryId: 'country-1' } },
+      { city: { id: 'city-2', countryId: 'country-1' } },
+      { city: { id: 'city-3', countryId: 'country-2' } },
+    ];
+
+    const songRows = [
+      { title: 'Song A' },
+      { title: 'Song A' },
+      { title: 'Song B' },
+    ];
+
+    it('throws NotFoundException when the artist does not exist', async () => {
+      prisma.artist.findUnique.mockResolvedValue(null);
+
+      await expect(service.findStats('missing-id')).rejects.toThrow(
+        NotFoundException,
+      );
+      expect(prisma.fanProfile.findMany).not.toHaveBeenCalled();
+      expect(prisma.show.count).not.toHaveBeenCalled();
+      expect(prisma.setlistSong.findMany).not.toHaveBeenCalled();
+    });
+
+    it('queries FanProfiles associated to the artist via FanArtist', async () => {
+      await service.findStats(theWarning.id);
+
+      expect(prisma.fanProfile.findMany).toHaveBeenCalledWith({
+        where: { artists: { some: { artistId: theWarning.id } } },
+        select: { city: { select: { id: true, countryId: true } } },
+      });
+    });
+
+    it('counts shows belonging to the artist', async () => {
+      await service.findStats(theWarning.id);
+
+      expect(prisma.show.count).toHaveBeenCalledWith({
+        where: { artistId: theWarning.id },
+      });
+    });
+
+    it('queries setlist songs scoped to the shows of the artist', async () => {
+      await service.findStats(theWarning.id);
+
+      expect(prisma.setlistSong.findMany).toHaveBeenCalledWith({
+        where: { setlist: { show: { artistId: theWarning.id } } },
+        select: { title: true },
+      });
+    });
+
+    it('returns all zeros when the artist has no data', async () => {
+      const result = await service.findStats(theWarning.id);
+
+      expect(result).toEqual({
+        fans: 0,
+        countries: 0,
+        cities: 0,
+        shows: 0,
+        songs: 0,
+      });
+    });
+
+    it('counts fans related to the artist', async () => {
+      prisma.fanProfile.findMany.mockResolvedValue(fansCityRows);
+
+      const result = await service.findStats(theWarning.id);
+
+      expect(result.fans).toBe(4);
+    });
+
+    it('deduplicates cities so a city with many fans counts once', async () => {
+      prisma.fanProfile.findMany.mockResolvedValue(fansCityRows);
+
+      const result = await service.findStats(theWarning.id);
+
+      expect(result.cities).toBe(3);
+    });
+
+    it('deduplicates countries so a country with many fans counts once', async () => {
+      prisma.fanProfile.findMany.mockResolvedValue(fansCityRows);
+
+      const result = await service.findStats(theWarning.id);
+
+      expect(result.countries).toBe(2);
+    });
+
+    it('returns the shows count from prisma as-is', async () => {
+      prisma.show.count.mockResolvedValue(5);
+
+      const result = await service.findStats(theWarning.id);
+
+      expect(result.shows).toBe(5);
+    });
+
+    it('deduplicates songs so a song repeated across setlists counts once', async () => {
+      prisma.setlistSong.findMany.mockResolvedValue(songRows);
+
+      const result = await service.findStats(theWarning.id);
+
+      expect(result.songs).toBe(2);
     });
   });
 });

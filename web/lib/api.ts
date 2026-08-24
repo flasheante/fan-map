@@ -61,6 +61,15 @@ export interface ShowSetlist {
   songs: SetlistSong[];
 }
 
+// Shape devuelto por GET /artists/:artistId/stats (ver ArtistsService.findStats).
+export interface ArtistStats {
+  fans: number;
+  countries: number;
+  cities: number;
+  shows: number;
+  songs: number;
+}
+
 // Shape devuelto por GET /countries/:countryId/cities (ver
 // CitiesController): la ciudad "plana", sin el país anidado que sí trae
 // ArtistFan.city / FanProfile.city.
@@ -179,6 +188,18 @@ export async function getArtistShows(artistId: string): Promise<ArtistShow[]> {
 
   if (!res.ok) {
     throw new Error(`Failed to fetch shows for artist ${artistId}: ${res.status}`);
+  }
+
+  return res.json();
+}
+
+export async function getArtistStats(artistId: string): Promise<ArtistStats> {
+  const res = await fetch(`${API_URL}/artists/${artistId}/stats`, {
+    cache: "no-store",
+  });
+
+  if (!res.ok) {
+    throw new Error(`Failed to fetch stats for artist ${artistId}: ${res.status}`);
   }
 
   return res.json();

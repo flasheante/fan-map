@@ -1,21 +1,26 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
-import type { Artist, ArtistFan, ArtistShow } from "@/lib/api";
+import type { Artist, ArtistFan, ArtistShow, ArtistStats } from "@/lib/api";
 import type { TheWarningMapData } from "@/lib/the-warning-fan-map";
 import type { TheWarningShowsData } from "@/lib/the-warning-shows";
+import type { TheWarningStatsData } from "@/lib/the-warning-stats";
 
-// Se mockean los mismos módulos que ya usa /map y la resolución de shows
-// (@/lib/the-warning-fan-map y @/lib/the-warning-shows), no @/lib/api
-// directamente para esa lógica: la resolución del artista por slug dentro de
-// esas funciones y las llamadas a getArtistFans/getArtistShows con su id ya
-// están cubiertas en sus propios tests, sin cambios. Esta página sí llama a
-// getArtists() de @/lib/api directamente (una sola vez) para compartir el
-// resultado entre ambas, así que ese único límite adicional se mockea acá.
+// Se mockean los mismos módulos que ya usa /map, la resolución de shows y la
+// de stats (@/lib/the-warning-fan-map, @/lib/the-warning-shows y
+// @/lib/the-warning-stats), no @/lib/api directamente para esa lógica: la
+// resolución del artista por slug dentro de esas funciones y las llamadas a
+// getArtistFans/getArtistShows/getArtistStats con su id ya están cubiertas en
+// sus propios tests, sin cambios. Esta página sí llama a getArtists() de
+// @/lib/api directamente (una sola vez) para compartir el resultado entre
+// las tres, así que ese único límite adicional se mockea acá.
 const { getTheWarningMapData } = vi.hoisted(() => ({
   getTheWarningMapData: vi.fn(),
 }));
 const { getTheWarningShowsData } = vi.hoisted(() => ({
   getTheWarningShowsData: vi.fn(),
+}));
+const { getTheWarningStatsData } = vi.hoisted(() => ({
+  getTheWarningStatsData: vi.fn(),
 }));
 const { getArtists } = vi.hoisted(() => ({
   getArtists: vi.fn(),
@@ -23,6 +28,7 @@ const { getArtists } = vi.hoisted(() => ({
 
 vi.mock("@/lib/the-warning-fan-map", () => ({ getTheWarningMapData }));
 vi.mock("@/lib/the-warning-shows", () => ({ getTheWarningShowsData }));
+vi.mock("@/lib/the-warning-stats", () => ({ getTheWarningStatsData }));
 vi.mock("@/lib/api", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/api")>();
   return { ...actual, getArtists };
@@ -37,6 +43,15 @@ vi.mock("@/components/map/fan-map-loader", () => ({
 vi.mock("@/components/artists/shows-list", () => ({
   ShowsList: ({ shows }: { shows: ArtistShow[] }) => (
     <div data-testid="shows-list">{shows.length} shows</div>
+  ),
+}));
+
+vi.mock("@/components/artists/artist-stats", () => ({
+  ArtistStatsSummary: ({ stats }: { stats: ArtistStats }) => (
+    <div data-testid="artist-stats-summary">
+      {stats.fans} fans · {stats.countries} countries · {stats.cities} cities ·{" "}
+      {stats.shows} shows · {stats.songs} songs
+    </div>
   ),
 }));
 
@@ -88,14 +103,38 @@ function makeShow(id: string): ArtistShow {
   };
 }
 
+function makeStats(overrides: Partial<ArtistStats> = {}): ArtistStats {
+  return {
+    fans: 3,
+    countries: 2,
+    cities: 2,
+    shows: 4,
+    songs: 10,
+    ...overrides,
+  };
+}
+
+const defaultShowsData: TheWarningShowsData = {
+  status: "ok",
+  artist: makeArtist(),
+  shows: [],
+};
+const defaultStatsData: TheWarningStatsData = {
+  status: "ok",
+  artist: makeArtist(),
+  stats: makeStats(),
+};
+
 async function renderPage(
   mapData: TheWarningMapData,
-  showsData: TheWarningShowsData = { status: "ok", artist: makeArtist(), shows: [] },
+  showsData: TheWarningShowsData = defaultShowsData,
+  statsData: TheWarningStatsData = defaultStatsData,
   artists: Artist[] = [makeArtist()],
 ) {
   getArtists.mockResolvedValue(artists);
   getTheWarningMapData.mockResolvedValue(mapData);
   getTheWarningShowsData.mockResolvedValue(showsData);
+  getTheWarningStatsData.mockResolvedValue(statsData);
   render(await TheWarningArtistPage());
 }
 
@@ -104,22 +143,25 @@ describe("TheWarningArtistPage", () => {
     getArtists.mockReset();
     getTheWarningMapData.mockReset();
     getTheWarningShowsData.mockReset();
+    getTheWarningStatsData.mockReset();
   });
 
-  it("fetches GET /artists once and shares it with getTheWarningMapData and getTheWarningShowsData (not a hardcoded id)", async () => {
+  it("fetches GET /artists once and shares it with getTheWarningMapData, getTheWarningShowsData and getTheWarningStatsData (not a hardcoded id)", async () => {
     const artists = [makeArtist()];
     await renderPage(
       { status: "ok", artist: makeArtist(), fans: [] },
       { status: "ok", artist: makeArtist(), shows: [] },
+      { status: "ok", artist: makeArtist(), stats: makeStats() },
       artists,
     );
 
     expect(getArtists).toHaveBeenCalledTimes(1);
     expect(getTheWarningMapData).toHaveBeenCalledWith(artists);
     expect(getTheWarningShowsData).toHaveBeenCalledWith(artists);
+    expect(getTheWarningStatsData).toHaveBeenCalledWith(artists);
   });
 
-  it("loads the map and the shows in parallel once the artists are resolved", async () => {
+  it("loads the map, the shows and the stats in parallel once the artists are resolved", async () => {
     const artists = [makeArtist()];
     getArtists.mockResolvedValue(artists);
     const order: string[] = [];
@@ -135,13 +177,26 @@ describe("TheWarningArtistPage", () => {
       order.push("shows-end");
       return { status: "ok", artist: makeArtist(), shows: [] };
     });
+    getTheWarningStatsData.mockImplementation(async () => {
+      order.push("stats-start");
+      await Promise.resolve();
+      order.push("stats-end");
+      return { status: "ok", artist: makeArtist(), stats: makeStats() };
+    });
 
     render(await TheWarningArtistPage());
 
-    expect(order).toEqual(["map-start", "shows-start", "map-end", "shows-end"]);
+    expect(order).toEqual([
+      "map-start",
+      "shows-start",
+      "stats-start",
+      "map-end",
+      "shows-end",
+      "stats-end",
+    ]);
   });
 
-  it("shows an error message when GET /artists fails, without calling getTheWarningMapData or getTheWarningShowsData", async () => {
+  it("shows an error message when GET /artists fails, without calling getTheWarningMapData, getTheWarningShowsData or getTheWarningStatsData", async () => {
     getArtists.mockRejectedValue(new Error("network error"));
 
     render(await TheWarningArtistPage());
@@ -151,6 +206,7 @@ describe("TheWarningArtistPage", () => {
     ).toBeInTheDocument();
     expect(getTheWarningMapData).not.toHaveBeenCalled();
     expect(getTheWarningShowsData).not.toHaveBeenCalled();
+    expect(getTheWarningStatsData).not.toHaveBeenCalled();
   });
 
   it("shows an error message when the map data could not be loaded", async () => {
@@ -161,6 +217,7 @@ describe("TheWarningArtistPage", () => {
     ).toBeInTheDocument();
     expect(screen.queryByTestId("fan-map-loader")).not.toBeInTheDocument();
     expect(screen.queryByTestId("shows-list")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("artist-stats-summary")).not.toBeInTheDocument();
   });
 
   it("shows an error message when the shows data could not be loaded", async () => {
@@ -174,14 +231,35 @@ describe("TheWarningArtistPage", () => {
     ).toBeInTheDocument();
     expect(screen.queryByTestId("fan-map-loader")).not.toBeInTheDocument();
     expect(screen.queryByTestId("shows-list")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("artist-stats-summary")).not.toBeInTheDocument();
+  });
+
+  it("shows an error message when the stats data could not be loaded", async () => {
+    await renderPage(
+      { status: "ok", artist: makeArtist(), fans: [] },
+      defaultShowsData,
+      { status: "error" },
+    );
+
+    expect(
+      screen.getByText(/no pudimos cargar la página del artista/i),
+    ).toBeInTheDocument();
+    expect(screen.queryByTestId("fan-map-loader")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("shows-list")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("artist-stats-summary")).not.toBeInTheDocument();
   });
 
   it("shows a not-found state when The Warning doesn't exist", async () => {
-    await renderPage({ status: "artist-not-found" }, { status: "artist-not-found" });
+    await renderPage(
+      { status: "artist-not-found" },
+      { status: "artist-not-found" },
+      { status: "artist-not-found" },
+    );
 
     expect(screen.getByText(/no se encontró el artista/i)).toBeInTheDocument();
     expect(screen.queryByTestId("fan-map-loader")).not.toBeInTheDocument();
     expect(screen.queryByTestId("shows-list")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("artist-stats-summary")).not.toBeInTheDocument();
   });
 
   it("shows the artist name", async () => {
@@ -243,6 +321,32 @@ describe("TheWarningArtistPage", () => {
     );
 
     expect(screen.getByTestId("shows-list")).toHaveTextContent("2 shows");
+  });
+
+  it("shows the artist stats summary with the loaded stats", async () => {
+    const stats = makeStats({ fans: 5, countries: 3, cities: 4, shows: 6, songs: 12 });
+    await renderPage(
+      { status: "ok", artist: makeArtist(), fans: [] },
+      defaultShowsData,
+      { status: "ok", artist: makeArtist(), stats },
+    );
+
+    expect(screen.getByTestId("artist-stats-summary")).toHaveTextContent(
+      "5 fans · 3 countries · 4 cities · 6 shows · 12 songs",
+    );
+  });
+
+  it("shows the artist stats summary with all-zero values when the artist has no data", async () => {
+    const stats = makeStats({ fans: 0, countries: 0, cities: 0, shows: 0, songs: 0 });
+    await renderPage(
+      { status: "ok", artist: makeArtist(), fans: [] },
+      defaultShowsData,
+      { status: "ok", artist: makeArtist(), stats },
+    );
+
+    expect(screen.getByTestId("artist-stats-summary")).toHaveTextContent(
+      "0 fans · 0 countries · 0 cities · 0 shows · 0 songs",
+    );
   });
 
   it("shows a friendly empty state when there are no fans", async () => {

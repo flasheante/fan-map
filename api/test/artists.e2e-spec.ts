@@ -314,6 +314,255 @@ describe('Artists (e2e)', () => {
     });
   });
 
+  describe('GET /artists/:artistId/stats', () => {
+    // Su propio set de datos: dos artistas, países/ciudades/shows/setlists
+    // propios. No se usa "The Warning" en las aserciones.
+    const statsSuffix = randomUUID().slice(0, 8);
+    const countryAName = `Stats Country A ${statsSuffix}`;
+    const countryBName = `Stats Country B ${statsSuffix}`;
+    const cityA1Name = `Stats City A1 ${statsSuffix}`;
+    const cityA2Name = `Stats City A2 ${statsSuffix}`;
+    const cityB1Name = `Stats City B1 ${statsSuffix}`;
+    const artistName = `Stats Artist ${statsSuffix}`;
+    const artistSlug = `stats-artist-${statsSuffix}`;
+    const otherArtistName = `Stats Other Artist ${statsSuffix}`;
+    const otherArtistSlug = `stats-other-artist-${statsSuffix}`;
+    const emptyArtistName = `Stats Empty Artist ${statsSuffix}`;
+    const emptyArtistSlug = `stats-empty-artist-${statsSuffix}`;
+
+    let countryAId: string;
+    let countryBId: string;
+    let cityA1Id: string;
+    let cityA2Id: string;
+    let cityB1Id: string;
+    let statsArtistId: string;
+    let otherArtistId: string;
+    let emptyArtistId: string;
+
+    const createdUserEmails: string[] = [];
+
+    function uniqueEmail(label: string) {
+      const email = `${label}-${randomUUID()}@example.com`;
+      createdUserEmails.push(email);
+      return email;
+    }
+
+    async function createFan(
+      label: string,
+      artistIds: string[],
+      fanCityId: string,
+    ) {
+      const email = uniqueEmail(label);
+      const response = await request(app.getHttpServer())
+        .post('/fan-profiles')
+        .send({
+          email,
+          displayName: `${label} Fan`,
+          cityId: fanCityId,
+          showOnMap: true,
+          artistIds,
+        })
+        .expect(201);
+      return response.body as { id: string };
+    }
+
+    beforeAll(async () => {
+      const countryA = await prisma.country.create({
+        data: { name: countryAName, code: `A${statsSuffix.slice(0, 1)}` },
+      });
+      countryAId = countryA.id;
+
+      const countryB = await prisma.country.create({
+        data: { name: countryBName, code: `B${statsSuffix.slice(0, 1)}` },
+      });
+      countryBId = countryB.id;
+
+      const cityA1 = await prisma.city.create({
+        data: { name: cityA1Name, countryId: countryAId },
+      });
+      cityA1Id = cityA1.id;
+
+      const cityA2 = await prisma.city.create({
+        data: { name: cityA2Name, countryId: countryAId },
+      });
+      cityA2Id = cityA2.id;
+
+      const cityB1 = await prisma.city.create({
+        data: { name: cityB1Name, countryId: countryBId },
+      });
+      cityB1Id = cityB1.id;
+
+      const artist = await prisma.artist.create({
+        data: { name: artistName, slug: artistSlug },
+      });
+      statsArtistId = artist.id;
+
+      const otherArtist = await prisma.artist.create({
+        data: { name: otherArtistName, slug: otherArtistSlug },
+      });
+      otherArtistId = otherArtist.id;
+
+      // emptyArtist no tiene fans, shows ni setlists: cubre el caso de
+      // artista existente sin datos (todos los valores en 0).
+      const emptyArtist = await prisma.artist.create({
+        data: { name: emptyArtistName, slug: emptyArtistSlug },
+      });
+      emptyArtistId = emptyArtist.id;
+
+      // Fans del artista: fan1 y fan2 comparten cityA1 (misma ciudad, mismo
+      // país) y deben deduplicar ciudad/país; fan3 está en cityA2 (otra
+      // ciudad, mismo país que fan1/fan2); fan4 está en cityB1 (otro país).
+      await createFan('stats-fan-1', [statsArtistId], cityA1Id);
+      await createFan('stats-fan-2', [statsArtistId], cityA1Id);
+      await createFan('stats-fan-3', [statsArtistId], cityA2Id);
+      await createFan('stats-fan-4', [statsArtistId], cityB1Id);
+      // Fan de otro artista: no debe contaminar las stats de statsArtist.
+      await createFan('stats-fan-other-artist', [otherArtistId], cityA1Id);
+
+      // Shows del artista, con setlists que comparten una canción ("Song A")
+      // para ejercitar la deduplicación de canciones.
+      const show1 = await prisma.show.create({
+        data: {
+          artistId: statsArtistId,
+          cityId: cityA1Id,
+          date: new Date('2026-06-01T00:00:00.000Z'),
+        },
+      });
+      const setlist1 = await prisma.setlist.create({
+        data: { showId: show1.id },
+      });
+      await prisma.setlistSong.createMany({
+        data: [
+          { setlistId: setlist1.id, title: 'Song A', position: 1 },
+          { setlistId: setlist1.id, title: 'Song B', position: 2 },
+        ],
+      });
+
+      const show2 = await prisma.show.create({
+        data: {
+          artistId: statsArtistId,
+          cityId: cityA2Id,
+          date: new Date('2026-07-01T00:00:00.000Z'),
+        },
+      });
+      const setlist2 = await prisma.setlist.create({
+        data: { showId: show2.id },
+      });
+      await prisma.setlistSong.createMany({
+        data: [
+          { setlistId: setlist2.id, title: 'Song A', position: 1 },
+          { setlistId: setlist2.id, title: 'Song C', position: 2 },
+        ],
+      });
+
+      // Show y setlist de otro artista: no deben contaminar las stats de
+      // statsArtist.
+      const otherShow = await prisma.show.create({
+        data: {
+          artistId: otherArtistId,
+          cityId: cityA1Id,
+          date: new Date('2026-08-01T00:00:00.000Z'),
+        },
+      });
+      const otherSetlist = await prisma.setlist.create({
+        data: { showId: otherShow.id },
+      });
+      await prisma.setlistSong.create({
+        data: { setlistId: otherSetlist.id, title: 'Other Artist Song', position: 1 },
+      });
+    });
+
+    afterAll(async () => {
+      const artistIds = [statsArtistId, otherArtistId, emptyArtistId];
+
+      const users = await prisma.user.findMany({
+        where: { email: { in: createdUserEmails } },
+        select: { id: true },
+      });
+      const userIds = users.map((user) => user.id);
+      const fanProfiles = await prisma.fanProfile.findMany({
+        where: { userId: { in: userIds } },
+        select: { id: true },
+      });
+      await prisma.fanArtist.deleteMany({
+        where: {
+          fanProfileId: { in: fanProfiles.map((profile) => profile.id) },
+        },
+      });
+      await prisma.fanProfile.deleteMany({ where: { userId: { in: userIds } } });
+      await prisma.user.deleteMany({ where: { email: { in: createdUserEmails } } });
+
+      await prisma.setlistSong.deleteMany({
+        where: { setlist: { show: { artistId: { in: artistIds } } } },
+      });
+      await prisma.setlist.deleteMany({
+        where: { show: { artistId: { in: artistIds } } },
+      });
+      await prisma.show.deleteMany({ where: { artistId: { in: artistIds } } });
+      await prisma.artist.deleteMany({ where: { id: { in: artistIds } } });
+      await prisma.city.deleteMany({
+        where: { id: { in: [cityA1Id, cityA2Id, cityB1Id] } },
+      });
+      await prisma.country.deleteMany({
+        where: { id: { in: [countryAId, countryBId] } },
+      });
+    });
+
+    it('returns 400 when the artistId is not a valid UUID', async () => {
+      await request(app.getHttpServer())
+        .get('/artists/not-a-uuid/stats')
+        .expect(400);
+    });
+
+    it('returns 404 when the artist does not exist', async () => {
+      await request(app.getHttpServer())
+        .get(`/artists/${randomUUID()}/stats`)
+        .expect(404);
+    });
+
+    it('returns all zeros when the artist has no data', async () => {
+      const response = await request(app.getHttpServer())
+        .get(`/artists/${emptyArtistId}/stats`)
+        .expect(200);
+
+      expect(response.body).toEqual({
+        fans: 0,
+        countries: 0,
+        cities: 0,
+        shows: 0,
+        songs: 0,
+      });
+    });
+
+    it('returns fans/countries/cities/shows/songs scoped to the artist, correctly deduplicated', async () => {
+      const response = await request(app.getHttpServer())
+        .get(`/artists/${statsArtistId}/stats`)
+        .expect(200);
+
+      expect(response.body).toEqual({
+        fans: 4,
+        countries: 2,
+        cities: 3,
+        shows: 2,
+        songs: 3,
+      });
+    });
+
+    it('does not mix in data from other artists', async () => {
+      const response = await request(app.getHttpServer())
+        .get(`/artists/${otherArtistId}/stats`)
+        .expect(200);
+
+      expect(response.body).toEqual({
+        fans: 1,
+        countries: 1,
+        cities: 1,
+        shows: 1,
+        songs: 1,
+      });
+    });
+  });
+
   describe('Seed data', () => {
     // Mirrors the idempotent upsert in prisma/seed.ts. Not cleaned up in
     // afterAll: it represents permanent seed data, not a test fixture.

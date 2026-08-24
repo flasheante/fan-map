@@ -4,6 +4,7 @@ import {
   getArtistFans,
   getArtistShow,
   getArtistShows,
+  getArtistStats,
   getArtists,
   getCities,
   getCountries,
@@ -130,6 +131,33 @@ describe("getArtistShows", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     await expect(getArtistShows("missing-id")).rejects.toThrow(/404/);
+  });
+});
+
+describe("getArtistStats", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("fetches GET /artists/:artistId/stats and returns the parsed stats", async () => {
+    const stats = { fans: 3, countries: 2, cities: 2, shows: 4, songs: 10 };
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(stats));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await getArtistStats("artist-1");
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringMatching(/\/artists\/artist-1\/stats$/),
+      expect.objectContaining({ cache: "no-store" }),
+    );
+    expect(result).toEqual(stats);
+  });
+
+  it("throws when the response is not ok", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(null, false, 404));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(getArtistStats("missing-id")).rejects.toThrow(/404/);
   });
 });
 
