@@ -50,6 +50,30 @@ export function groupShowsByCity(shows: ArtistShow[]): TourCity[] {
   return Array.from(citiesById.values());
 }
 
+export interface TourCityDateRange {
+  firstShow: ArtistShow | null;
+  lastShow: ArtistShow | null;
+}
+
+// Analogía de findFirstAndLastShow en the-warning-tour-stats.ts, pero a
+// nivel de una única ciudad (TourCity.shows) en lugar del historial
+// completo del artista: el popup del Tour Map la usa para mostrar el rango
+// de fechas y el último show de esa ciudad sin pedir nada al backend (ver
+// tour-map.tsx). [...shows] copia el array antes de ordenar: no debe mutar
+// la colección que le pasó el caller (ver el test "does not mutate the
+// original array").
+export function getTourCityDateRange(shows: ArtistShow[]): TourCityDateRange {
+  if (shows.length === 0) {
+    return { firstShow: null, lastShow: null };
+  }
+
+  const byDateAsc = [...shows].sort(
+    (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
+  );
+
+  return { firstShow: byDateAsc[0], lastShow: byDateAsc[byDateAsc.length - 1] };
+}
+
 // Mismo flujo que getTheWarningShowsData: GET /artists, ubicar "the-warning"
 // por slug (sin hardcodear su UUID, reutilizando THE_WARNING_SLUG /
 // findArtistBySlug) y luego GET /artists/:artistId/shows, agrupando el

@@ -138,72 +138,129 @@ describe("TourMap", () => {
     expect(screen.getByText(/2 shows/i)).toBeInTheDocument();
   });
 
-  it("lists every show of a city with multiple shows, with date and venue", () => {
+  // El popup ya no lista cada show individualmente (ver "Ver historial" más
+  // abajo, que cubre la navegación al detalle): en su lugar muestra un
+  // resumen (cantidad, rango de fechas, último show) calculado con
+  // getTourCityDateRange (the-warning-tour-map.ts).
+  it("shows a single date, without a range, when the city has exactly one show", () => {
     const city = makeCity({
       shows: [
         {
+          ...makeCity().shows[0],
           id: SHOW_A_ID,
-          date: "2024-03-15T00:00:00.000Z",
-          venue: "Demo Venue",
-          createdAt: "2026-01-01T00:00:00.000Z",
-          updatedAt: "2026-01-01T00:00:00.000Z",
-          city: {
-            id: MENDOZA_ID,
-            name: "Mendoza",
-            latitude: -32.8895,
-            longitude: -68.8458,
-            country: { id: "country-ar", name: "Argentina", code: "AR" },
-          },
-        },
-        {
-          id: SHOW_B_ID,
-          date: "2025-08-20T00:00:00.000Z",
-          venue: "Demo Arena",
-          createdAt: "2026-01-01T00:00:00.000Z",
-          updatedAt: "2026-01-01T00:00:00.000Z",
-          city: {
-            id: MENDOZA_ID,
-            name: "Mendoza",
-            latitude: -32.8895,
-            longitude: -68.8458,
-            country: { id: "country-ar", name: "Argentina", code: "AR" },
-          },
+          date: "2026-08-15T00:00:00.000Z",
         },
       ],
     });
 
     render(<TourMap cities={[city]} />);
 
-    expect(screen.getByText(/15 de marzo de 2024/i)).toBeInTheDocument();
-    expect(screen.getByText("Demo Venue")).toBeInTheDocument();
-    expect(screen.getByText(/20 de agosto de 2025/i)).toBeInTheDocument();
-    expect(screen.getByText("Demo Arena")).toBeInTheDocument();
+    expect(screen.getByText(/1 show/i)).toBeInTheDocument();
+    expect(screen.getByText(/15 de agosto de 2026/i)).toBeInTheDocument();
+    // No debe renderizar un rango redundante (fecha → misma fecha).
+    expect(screen.queryByText(/2026 →/)).not.toBeInTheDocument();
   });
 
-  it("links each show to its detail page without exposing UUIDs in visible text", () => {
+  it("shows the first and last date as a range for multiple shows, ordered chronologically regardless of input order", () => {
     const city = makeCity({
       shows: [
-        { ...makeCity().shows[0], id: SHOW_A_ID },
-        { ...makeCity().shows[0], id: SHOW_B_ID },
+        {
+          ...makeCity().shows[0],
+          id: SHOW_B_ID,
+          date: "2026-08-20T00:00:00.000Z",
+          venue: "Demo Arena",
+        },
+        {
+          ...makeCity().shows[0],
+          id: SHOW_A_ID,
+          date: "2024-08-15T00:00:00.000Z",
+          venue: "Demo Venue",
+        },
       ],
     });
 
-    const { container } = render(<TourMap cities={[city]} />);
+    render(<TourMap cities={[city]} />);
 
-    const links = screen.getAllByRole("link", { name: /ver show/i });
-    expect(links).toHaveLength(2);
-    expect(links[0]).toHaveAttribute(
-      "href",
-      `/artists/the-warning/shows/${SHOW_A_ID}`,
-    );
-    expect(links[1]).toHaveAttribute(
-      "href",
-      `/artists/the-warning/shows/${SHOW_B_ID}`,
-    );
+    expect(
+      screen.getByText(/15 de agosto de 2024.*→.*20 de agosto de 2026/),
+    ).toBeInTheDocument();
+  });
 
-    expect(container.textContent).not.toContain(SHOW_A_ID);
-    expect(container.textContent).not.toContain(SHOW_B_ID);
-    expect(container.textContent).not.toContain(MENDOZA_ID);
+  it("shows the venue of the most recent show as the last show, not the earlier ones", () => {
+    const city = makeCity({
+      shows: [
+        {
+          ...makeCity().shows[0],
+          id: SHOW_A_ID,
+          date: "2024-08-15T00:00:00.000Z",
+          venue: "Demo Venue",
+        },
+        {
+          ...makeCity().shows[0],
+          id: SHOW_B_ID,
+          date: "2026-08-20T00:00:00.000Z",
+          venue: "Demo Arena",
+        },
+      ],
+    });
+
+    render(<TourMap cities={[city]} />);
+
+    expect(screen.getByText(/último show/i)).toBeInTheDocument();
+    expect(screen.getByText(/Demo Arena/)).toBeInTheDocument();
+    expect(screen.queryByText(/Demo Venue/)).not.toBeInTheDocument();
+  });
+
+  it("keeps each city's own shows independent from other cities' popups", () => {
+    const mendoza = makeCity({
+      id: MENDOZA_ID,
+      name: "Mendoza",
+      shows: [
+        {
+          ...makeCity().shows[0],
+          id: SHOW_A_ID,
+          date: "2024-08-15T00:00:00.000Z",
+          venue: "Demo Venue",
+        },
+      ],
+    });
+    const buenosAiresCity = {
+      id: BUENOS_AIRES_ID,
+      name: "Buenos Aires",
+      latitude: -34.6037,
+      longitude: -58.3816,
+      country: { id: "country-ar", name: "Argentina", code: "AR" },
+    };
+    const buenosAires = makeCity({
+      id: BUENOS_AIRES_ID,
+      name: "Buenos Aires",
+      latitude: -34.6037,
+      longitude: -58.3816,
+      shows: [
+        {
+          ...makeCity().shows[0],
+          id: SHOW_B_ID,
+          date: "2025-01-10T00:00:00.000Z",
+          venue: "Demo Stage",
+          city: buenosAiresCity,
+        },
+        {
+          ...makeCity().shows[0],
+          id: SHOW_C_ID,
+          date: "2026-02-20T00:00:00.000Z",
+          venue: "Demo Stadium",
+          city: buenosAiresCity,
+        },
+      ],
+    });
+
+    render(<TourMap cities={[mendoza, buenosAires]} />);
+
+    expect(screen.getByText(/1 show/i)).toBeInTheDocument();
+    expect(screen.getByText(/2 shows/i)).toBeInTheDocument();
+    expect(screen.getByText(/Demo Venue/)).toBeInTheDocument();
+    expect(screen.getByText(/Demo Stadium/)).toBeInTheDocument();
+    expect(screen.queryByText(/Demo Stage/)).not.toBeInTheDocument();
   });
 
   it("links each city to its show history page via a VER HISTORIAL link", () => {

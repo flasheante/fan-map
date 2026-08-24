@@ -11,7 +11,7 @@ import {
 } from "react-leaflet";
 import L, { type LatLngBoundsExpression, type LatLngTuple } from "leaflet";
 import "leaflet/dist/leaflet.css";
-import type { TourCity } from "@/lib/the-warning-tour-map";
+import { getTourCityDateRange, type TourCity } from "@/lib/the-warning-tour-map";
 
 const DEFAULT_ZOOM = 2;
 const SINGLE_CITY_ZOOM = 10;
@@ -89,40 +89,67 @@ export function TourMap({ cities }: TourMapProps) {
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
       />
       <FitBounds cities={cities} />
-      {cities.map((city) => (
-        <Marker key={city.id} position={[city.latitude, city.longitude]}>
-          <Popup>
-            <div className="flex flex-col gap-1">
-              <strong>{city.name}</strong>
-              <span>{city.country.name}</span>
-              <span>
-                {city.shows.length}{" "}
-                {city.shows.length === 1 ? "show" : "shows"}
-              </span>
-              <Link
-                href={`/artists/the-warning/tour/${city.id}`}
-                className="text-xs font-semibold uppercase tracking-wide underline underline-offset-2"
-              >
-                Ver historial →
-              </Link>
-              <ul className="mt-2 flex flex-col gap-2">
-                {city.shows.map((show) => (
-                  <li key={show.id} className="flex flex-col">
-                    <span>{dateFormatter.format(new Date(show.date))}</span>
-                    <span>{show.venue ?? "Venue a confirmar"}</span>
-                    <Link
-                      href={`/artists/the-warning/shows/${show.id}`}
-                      className="underline underline-offset-2"
-                    >
-                      Ver show →
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </Popup>
-        </Marker>
-      ))}
+      {cities.map((city) => {
+        const { firstShow, lastShow } = getTourCityDateRange(city.shows);
+        const showCount = city.shows.length;
+
+        return (
+          <Marker key={city.id} position={[city.latitude, city.longitude]}>
+            <Popup>
+              <div className="flex flex-col gap-2 text-sm">
+                <div>
+                  <strong className="text-base">{city.name}</strong>
+                  <div>{city.country.name}</div>
+                </div>
+
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                    {showCount} {showCount === 1 ? "show" : "shows"}
+                  </span>
+                  {firstShow && lastShow ? (
+                    showCount === 1 ? (
+                      <span>{dateFormatter.format(new Date(firstShow.date))}</span>
+                    ) : (
+                      <span>
+                        {dateFormatter.format(new Date(firstShow.date))} →{" "}
+                        {dateFormatter.format(new Date(lastShow.date))}
+                      </span>
+                    )
+                  ) : (
+                    <span>Sin shows registrados</span>
+                  )}
+                </div>
+
+                {/* Sólo se etiqueta "Último show" cuando hay más de uno: con
+                    un único show ya está cubierto por el bloque de arriba y
+                    repetir la fecha sería redundante (ver reglas del
+                    slice). */}
+                {lastShow && showCount > 1 && (
+                  <div className="flex flex-col gap-0.5">
+                    <span className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                      Último show
+                    </span>
+                    <span>{dateFormatter.format(new Date(lastShow.date))}</span>
+                    <span>
+                      {lastShow.venue ?? "Venue a confirmar"} · {city.name}
+                    </span>
+                  </div>
+                )}
+                {lastShow && showCount === 1 && (
+                  <span>{lastShow.venue ?? "Venue a confirmar"} · {city.name}</span>
+                )}
+
+                <Link
+                  href={`/artists/the-warning/tour/${city.id}`}
+                  className="text-xs font-semibold uppercase tracking-wide underline underline-offset-2"
+                >
+                  Ver historial →
+                </Link>
+              </div>
+            </Popup>
+          </Marker>
+        );
+      })}
     </MapContainer>
   );
 }

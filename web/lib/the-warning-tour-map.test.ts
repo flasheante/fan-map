@@ -8,9 +8,8 @@ const { getArtists, getArtistShows } = vi.hoisted(() => ({
 
 vi.mock("./api", () => ({ getArtists, getArtistShows }));
 
-const { getTheWarningTourMapData, groupShowsByCity } = await import(
-  "./the-warning-tour-map"
-);
+const { getTheWarningTourMapData, groupShowsByCity, getTourCityDateRange } =
+  await import("./the-warning-tour-map");
 const { THE_WARNING_SLUG } = await import("./the-warning-fan-map");
 
 function makeArtist(overrides: Partial<Artist> = {}): Artist {
@@ -126,6 +125,56 @@ describe("groupShowsByCity", () => {
 
     expect(cities).toHaveLength(1);
     expect(cities[0].id).toBe("city-mendoza");
+  });
+});
+
+describe("getTourCityDateRange", () => {
+  it("returns null firstShow/lastShow for a city without shows", () => {
+    expect(getTourCityDateRange([])).toEqual({
+      firstShow: null,
+      lastShow: null,
+    });
+  });
+
+  it("returns the same show as firstShow and lastShow for a city with one show", () => {
+    const show = makeShow({ id: "show-a", date: "2026-08-15T00:00:00.000Z" });
+
+    expect(getTourCityDateRange([show])).toEqual({
+      firstShow: show,
+      lastShow: show,
+    });
+  });
+
+  it("returns the earlier show as firstShow and the later as lastShow for two shows", () => {
+    const earlier = makeShow({ id: "show-a", date: "2024-03-15T00:00:00.000Z" });
+    const later = makeShow({ id: "show-b", date: "2026-08-20T00:00:00.000Z" });
+
+    expect(getTourCityDateRange([earlier, later])).toEqual({
+      firstShow: earlier,
+      lastShow: later,
+    });
+  });
+
+  it("sorts multiple shows chronologically even when given out of order", () => {
+    const middle = makeShow({ id: "show-mid", date: "2025-01-10T00:00:00.000Z" });
+    const latest = makeShow({ id: "show-latest", date: "2026-08-20T00:00:00.000Z" });
+    const earliest = makeShow({ id: "show-earliest", date: "2024-03-15T00:00:00.000Z" });
+
+    const result = getTourCityDateRange([middle, latest, earliest]);
+
+    expect(result.firstShow).toEqual(earliest);
+    expect(result.lastShow).toEqual(latest);
+  });
+
+  it("does not mutate the original array", () => {
+    const latest = makeShow({ id: "show-latest", date: "2026-08-20T00:00:00.000Z" });
+    const earliest = makeShow({ id: "show-earliest", date: "2024-03-15T00:00:00.000Z" });
+    const shows = [latest, earliest];
+    const original = [...shows];
+
+    getTourCityDateRange(shows);
+
+    expect(shows).toEqual(original);
   });
 });
 
