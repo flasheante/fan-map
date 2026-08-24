@@ -93,12 +93,20 @@ export default async function TheWarningArtistPage() {
             </p>
           </div>
         </div>
-        <Link
-          href="/join"
-          className="rounded-full bg-foreground px-5 py-2.5 text-sm font-medium text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc]"
-        >
-          Join the FanMap
-        </Link>
+        <div className="flex items-center gap-3">
+          <Link
+            href="/artists/the-warning/tour"
+            className="rounded-full border border-foreground px-5 py-2.5 text-sm font-medium transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-900"
+          >
+            HISTORIAL DE SHOWS
+          </Link>
+          <Link
+            href="/join"
+            className="rounded-full bg-foreground px-5 py-2.5 text-sm font-medium text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc]"
+          >
+            Join the FanMap
+          </Link>
+        </div>
       </header>
       <ArtistStatsSummary stats={stats} />
       <div className="min-h-0 flex-1">

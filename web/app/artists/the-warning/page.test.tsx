@@ -459,4 +459,16 @@ describe("TheWarningArtistPage", () => {
     const cta = screen.getByRole("link", { name: /join the fanmap/i });
     expect(cta).toHaveAttribute("href", "/join");
   });
+
+  it("renders a working CTA linking to the show history", async () => {
+    await renderPage({ status: "ok", artist: makeArtist(), fans: [] });
+
+    const cta = screen.getByRole("link", {
+      name: /historial de shows/i,
+    });
+    expect(cta).toHaveAttribute(
+      "href",
+      "/artists/the-warning/tour",
+    );
+  });
 });
