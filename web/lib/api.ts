@@ -70,6 +70,13 @@ export interface ArtistStats {
   songs: number;
 }
 
+// Shape devuelto por GET /artists/:artistId/stats/songs (ver
+// ArtistsService.findTopSongs), ya ordenado por timesPlayed desc / title asc.
+export interface ArtistTopSong {
+  title: string;
+  timesPlayed: number;
+}
+
 // Shape devuelto por GET /countries/:countryId/cities (ver
 // CitiesController): la ciudad "plana", sin el país anidado que sí trae
 // ArtistFan.city / FanProfile.city.
@@ -200,6 +207,22 @@ export async function getArtistStats(artistId: string): Promise<ArtistStats> {
 
   if (!res.ok) {
     throw new Error(`Failed to fetch stats for artist ${artistId}: ${res.status}`);
+  }
+
+  return res.json();
+}
+
+export async function getArtistTopSongs(
+  artistId: string,
+): Promise<ArtistTopSong[]> {
+  const res = await fetch(`${API_URL}/artists/${artistId}/stats/songs`, {
+    cache: "no-store",
+  });
+
+  if (!res.ok) {
+    throw new Error(
+      `Failed to fetch top songs for artist ${artistId}: ${res.status}`,
+    );
   }
 
   return res.json();

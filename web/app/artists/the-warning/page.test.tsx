@@ -1,18 +1,27 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
-import type { Artist, ArtistFan, ArtistShow, ArtistStats } from "@/lib/api";
+import type {
+  Artist,
+  ArtistFan,
+  ArtistShow,
+  ArtistStats,
+  ArtistTopSong,
+} from "@/lib/api";
 import type { TheWarningMapData } from "@/lib/the-warning-fan-map";
 import type { TheWarningShowsData } from "@/lib/the-warning-shows";
 import type { TheWarningStatsData } from "@/lib/the-warning-stats";
+import type { TheWarningTopSongsData } from "@/lib/the-warning-top-songs";
 
-// Se mockean los mismos módulos que ya usa /map, la resolución de shows y la
-// de stats (@/lib/the-warning-fan-map, @/lib/the-warning-shows y
-// @/lib/the-warning-stats), no @/lib/api directamente para esa lógica: la
+// Se mockean los mismos módulos que ya usa /map, la resolución de shows, la
+// de stats y la de top songs (@/lib/the-warning-fan-map,
+// @/lib/the-warning-shows, @/lib/the-warning-stats y
+// @/lib/the-warning-top-songs), no @/lib/api directamente para esa lógica: la
 // resolución del artista por slug dentro de esas funciones y las llamadas a
-// getArtistFans/getArtistShows/getArtistStats con su id ya están cubiertas en
-// sus propios tests, sin cambios. Esta página sí llama a getArtists() de
-// @/lib/api directamente (una sola vez) para compartir el resultado entre
-// las tres, así que ese único límite adicional se mockea acá.
+// getArtistFans/getArtistShows/getArtistStats/getArtistTopSongs con su id ya
+// están cubiertas en sus propios tests, sin cambios. Esta página sí llama a
+// getArtists() de @/lib/api directamente (una sola vez) para compartir el
+// resultado entre las cuatro, así que ese único límite adicional se mockea
+// acá.
 const { getTheWarningMapData } = vi.hoisted(() => ({
   getTheWarningMapData: vi.fn(),
 }));
@@ -22,6 +31,9 @@ const { getTheWarningShowsData } = vi.hoisted(() => ({
 const { getTheWarningStatsData } = vi.hoisted(() => ({
   getTheWarningStatsData: vi.fn(),
 }));
+const { getTheWarningTopSongsData } = vi.hoisted(() => ({
+  getTheWarningTopSongsData: vi.fn(),
+}));
 const { getArtists } = vi.hoisted(() => ({
   getArtists: vi.fn(),
 }));
@@ -29,6 +41,7 @@ const { getArtists } = vi.hoisted(() => ({
 vi.mock("@/lib/the-warning-fan-map", () => ({ getTheWarningMapData }));
 vi.mock("@/lib/the-warning-shows", () => ({ getTheWarningShowsData }));
 vi.mock("@/lib/the-warning-stats", () => ({ getTheWarningStatsData }));
+vi.mock("@/lib/the-warning-top-songs", () => ({ getTheWarningTopSongsData }));
 vi.mock("@/lib/api", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/api")>();
   return { ...actual, getArtists };
@@ -52,6 +65,12 @@ vi.mock("@/components/artists/artist-stats", () => ({
       {stats.fans} fans · {stats.countries} countries · {stats.cities} cities ·{" "}
       {stats.shows} shows · {stats.songs} songs
     </div>
+  ),
+}));
+
+vi.mock("@/components/artists/top-songs", () => ({
+  TopSongs: ({ topSongs }: { topSongs: ArtistTopSong[] }) => (
+    <div data-testid="top-songs">{topSongs.length} top songs</div>
   ),
 }));
 
@@ -114,6 +133,13 @@ function makeStats(overrides: Partial<ArtistStats> = {}): ArtistStats {
   };
 }
 
+function makeTopSongs(): ArtistTopSong[] {
+  return [
+    { title: "S!CK", timesPlayed: 42 },
+    { title: "MORE", timesPlayed: 38 },
+  ];
+}
+
 const defaultShowsData: TheWarningShowsData = {
   status: "ok",
   artist: makeArtist(),
@@ -124,17 +150,24 @@ const defaultStatsData: TheWarningStatsData = {
   artist: makeArtist(),
   stats: makeStats(),
 };
+const defaultTopSongsData: TheWarningTopSongsData = {
+  status: "ok",
+  artist: makeArtist(),
+  topSongs: [],
+};
 
 async function renderPage(
   mapData: TheWarningMapData,
   showsData: TheWarningShowsData = defaultShowsData,
   statsData: TheWarningStatsData = defaultStatsData,
+  topSongsData: TheWarningTopSongsData = defaultTopSongsData,
   artists: Artist[] = [makeArtist()],
 ) {
   getArtists.mockResolvedValue(artists);
   getTheWarningMapData.mockResolvedValue(mapData);
   getTheWarningShowsData.mockResolvedValue(showsData);
   getTheWarningStatsData.mockResolvedValue(statsData);
+  getTheWarningTopSongsData.mockResolvedValue(topSongsData);
   render(await TheWarningArtistPage());
 }
 
@@ -144,14 +177,16 @@ describe("TheWarningArtistPage", () => {
     getTheWarningMapData.mockReset();
     getTheWarningShowsData.mockReset();
     getTheWarningStatsData.mockReset();
+    getTheWarningTopSongsData.mockReset();
   });
 
-  it("fetches GET /artists once and shares it with getTheWarningMapData, getTheWarningShowsData and getTheWarningStatsData (not a hardcoded id)", async () => {
+  it("fetches GET /artists once and shares it with getTheWarningMapData, getTheWarningShowsData, getTheWarningStatsData and getTheWarningTopSongsData (not a hardcoded id)", async () => {
     const artists = [makeArtist()];
     await renderPage(
       { status: "ok", artist: makeArtist(), fans: [] },
       { status: "ok", artist: makeArtist(), shows: [] },
       { status: "ok", artist: makeArtist(), stats: makeStats() },
+      { status: "ok", artist: makeArtist(), topSongs: makeTopSongs() },
       artists,
     );
 
@@ -159,9 +194,10 @@ describe("TheWarningArtistPage", () => {
     expect(getTheWarningMapData).toHaveBeenCalledWith(artists);
     expect(getTheWarningShowsData).toHaveBeenCalledWith(artists);
     expect(getTheWarningStatsData).toHaveBeenCalledWith(artists);
+    expect(getTheWarningTopSongsData).toHaveBeenCalledWith(artists);
   });
 
-  it("loads the map, the shows and the stats in parallel once the artists are resolved", async () => {
+  it("loads the map, the shows, the stats and the top songs in parallel once the artists are resolved", async () => {
     const artists = [makeArtist()];
     getArtists.mockResolvedValue(artists);
     const order: string[] = [];
@@ -183,6 +219,12 @@ describe("TheWarningArtistPage", () => {
       order.push("stats-end");
       return { status: "ok", artist: makeArtist(), stats: makeStats() };
     });
+    getTheWarningTopSongsData.mockImplementation(async () => {
+      order.push("top-songs-start");
+      await Promise.resolve();
+      order.push("top-songs-end");
+      return { status: "ok", artist: makeArtist(), topSongs: [] };
+    });
 
     render(await TheWarningArtistPage());
 
@@ -190,13 +232,15 @@ describe("TheWarningArtistPage", () => {
       "map-start",
       "shows-start",
       "stats-start",
+      "top-songs-start",
       "map-end",
       "shows-end",
       "stats-end",
+      "top-songs-end",
     ]);
   });
 
-  it("shows an error message when GET /artists fails, without calling getTheWarningMapData, getTheWarningShowsData or getTheWarningStatsData", async () => {
+  it("shows an error message when GET /artists fails, without calling getTheWarningMapData, getTheWarningShowsData, getTheWarningStatsData or getTheWarningTopSongsData", async () => {
     getArtists.mockRejectedValue(new Error("network error"));
 
     render(await TheWarningArtistPage());
@@ -207,6 +251,7 @@ describe("TheWarningArtistPage", () => {
     expect(getTheWarningMapData).not.toHaveBeenCalled();
     expect(getTheWarningShowsData).not.toHaveBeenCalled();
     expect(getTheWarningStatsData).not.toHaveBeenCalled();
+    expect(getTheWarningTopSongsData).not.toHaveBeenCalled();
   });
 
   it("shows an error message when the map data could not be loaded", async () => {
@@ -218,6 +263,7 @@ describe("TheWarningArtistPage", () => {
     expect(screen.queryByTestId("fan-map-loader")).not.toBeInTheDocument();
     expect(screen.queryByTestId("shows-list")).not.toBeInTheDocument();
     expect(screen.queryByTestId("artist-stats-summary")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("top-songs")).not.toBeInTheDocument();
   });
 
   it("shows an error message when the shows data could not be loaded", async () => {
@@ -232,6 +278,7 @@ describe("TheWarningArtistPage", () => {
     expect(screen.queryByTestId("fan-map-loader")).not.toBeInTheDocument();
     expect(screen.queryByTestId("shows-list")).not.toBeInTheDocument();
     expect(screen.queryByTestId("artist-stats-summary")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("top-songs")).not.toBeInTheDocument();
   });
 
   it("shows an error message when the stats data could not be loaded", async () => {
@@ -247,10 +294,29 @@ describe("TheWarningArtistPage", () => {
     expect(screen.queryByTestId("fan-map-loader")).not.toBeInTheDocument();
     expect(screen.queryByTestId("shows-list")).not.toBeInTheDocument();
     expect(screen.queryByTestId("artist-stats-summary")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("top-songs")).not.toBeInTheDocument();
+  });
+
+  it("shows an error message when the top songs data could not be loaded", async () => {
+    await renderPage(
+      { status: "ok", artist: makeArtist(), fans: [] },
+      defaultShowsData,
+      defaultStatsData,
+      { status: "error" },
+    );
+
+    expect(
+      screen.getByText(/no pudimos cargar la página del artista/i),
+    ).toBeInTheDocument();
+    expect(screen.queryByTestId("fan-map-loader")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("shows-list")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("artist-stats-summary")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("top-songs")).not.toBeInTheDocument();
   });
 
   it("shows a not-found state when The Warning doesn't exist", async () => {
     await renderPage(
+      { status: "artist-not-found" },
       { status: "artist-not-found" },
       { status: "artist-not-found" },
       { status: "artist-not-found" },
@@ -260,6 +326,7 @@ describe("TheWarningArtistPage", () => {
     expect(screen.queryByTestId("fan-map-loader")).not.toBeInTheDocument();
     expect(screen.queryByTestId("shows-list")).not.toBeInTheDocument();
     expect(screen.queryByTestId("artist-stats-summary")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("top-songs")).not.toBeInTheDocument();
   });
 
   it("shows the artist name", async () => {
@@ -347,6 +414,29 @@ describe("TheWarningArtistPage", () => {
     expect(screen.getByTestId("artist-stats-summary")).toHaveTextContent(
       "0 fans · 0 countries · 0 cities · 0 shows · 0 songs",
     );
+  });
+
+  it("shows the top songs with the loaded top songs, reusing the same resolved artist", async () => {
+    const topSongs = makeTopSongs();
+    await renderPage(
+      { status: "ok", artist: makeArtist(), fans: [] },
+      defaultShowsData,
+      defaultStatsData,
+      { status: "ok", artist: makeArtist(), topSongs },
+    );
+
+    expect(screen.getByTestId("top-songs")).toHaveTextContent("2 top songs");
+  });
+
+  it("shows the top songs empty state when the artist has no songs", async () => {
+    await renderPage(
+      { status: "ok", artist: makeArtist(), fans: [] },
+      defaultShowsData,
+      defaultStatsData,
+      { status: "ok", artist: makeArtist(), topSongs: [] },
+    );
+
+    expect(screen.getByTestId("top-songs")).toHaveTextContent("0 top songs");
   });
 
   it("shows a friendly empty state when there are no fans", async () => {

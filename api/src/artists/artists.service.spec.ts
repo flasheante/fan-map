@@ -9,7 +9,7 @@ describe('ArtistsService', () => {
     artist: { findMany: jest.Mock; findUnique: jest.Mock };
     fanProfile: { findMany: jest.Mock };
     show: { count: jest.Mock };
-    setlistSong: { findMany: jest.Mock };
+    setlistSong: { findMany: jest.Mock; groupBy: jest.Mock };
   };
 
   const theWarning = {
@@ -35,6 +35,7 @@ describe('ArtistsService', () => {
       },
       setlistSong: {
         findMany: jest.fn().mockResolvedValue([]),
+        groupBy: jest.fn().mockResolvedValue([]),
       },
     };
 
@@ -339,6 +340,50 @@ describe('ArtistsService', () => {
       const result = await service.findStats(theWarning.id);
 
       expect(result.songs).toBe(2);
+    });
+  });
+
+  describe('findTopSongs', () => {
+    const groupedRows = [
+      { title: 'S!CK', _count: { title: 42 } },
+      { title: 'MORE', _count: { title: 38 } },
+    ];
+
+    it('throws NotFoundException when the artist does not exist', async () => {
+      prisma.artist.findUnique.mockResolvedValue(null);
+
+      await expect(service.findTopSongs('missing-id')).rejects.toThrow(
+        NotFoundException,
+      );
+      expect(prisma.setlistSong.groupBy).not.toHaveBeenCalled();
+    });
+
+    it('groups setlist songs scoped to the shows of the artist, ordered by count desc then title asc', async () => {
+      await service.findTopSongs(theWarning.id);
+
+      expect(prisma.setlistSong.groupBy).toHaveBeenCalledWith({
+        by: ['title'],
+        where: { setlist: { show: { artistId: theWarning.id } } },
+        _count: { title: true },
+        orderBy: [{ _count: { title: 'desc' } }, { title: 'asc' }],
+      });
+    });
+
+    it('maps the grouped rows to { title, timesPlayed }', async () => {
+      prisma.setlistSong.groupBy.mockResolvedValue(groupedRows);
+
+      const result = await service.findTopSongs(theWarning.id);
+
+      expect(result).toEqual([
+        { title: 'S!CK', timesPlayed: 42 },
+        { title: 'MORE', timesPlayed: 38 },
+      ]);
+    });
+
+    it('returns an empty array when the artist has no songs', async () => {
+      const result = await service.findTopSongs(theWarning.id);
+
+      expect(result).toEqual([]);
     });
   });
 });

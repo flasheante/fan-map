@@ -28,4 +28,9 @@ export class ArtistsController {
   findStats(@Param('artistId', ParseUUIDPipe) artistId: string) {
     return this.artistsService.findStats(artistId);
   }
+
+  @Get(':artistId/stats/songs')
+  findTopSongs(@Param('artistId', ParseUUIDPipe) artistId: string) {
+    return this.artistsService.findTopSongs(artistId);
+  }
 }

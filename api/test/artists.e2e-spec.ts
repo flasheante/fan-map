@@ -563,6 +563,224 @@ describe('Artists (e2e)', () => {
     });
   });
 
+  describe('GET /artists/:artistId/stats/songs', () => {
+    // Su propio set de datos: dos artistas, shows/setlists/canciones
+    // propios. No se usa "The Warning" en las aserciones.
+    const topSongsSuffix = randomUUID().slice(0, 8);
+    const countryName = `Top Songs Country ${topSongsSuffix}`;
+    const cityName = `Top Songs City ${topSongsSuffix}`;
+    const artistName = `Top Songs Artist ${topSongsSuffix}`;
+    const artistSlug = `top-songs-artist-${topSongsSuffix}`;
+    const otherArtistName = `Top Songs Other Artist ${topSongsSuffix}`;
+    const otherArtistSlug = `top-songs-other-artist-${topSongsSuffix}`;
+    const emptyArtistName = `Top Songs Empty Artist ${topSongsSuffix}`;
+    const emptyArtistSlug = `top-songs-empty-artist-${topSongsSuffix}`;
+    const noSetlistArtistName = `Top Songs No Setlist Artist ${topSongsSuffix}`;
+    const noSetlistArtistSlug = `top-songs-no-setlist-artist-${topSongsSuffix}`;
+
+    let countryId: string;
+    let cityId: string;
+    let topSongsArtistId: string;
+    let otherArtistId: string;
+    let emptyArtistId: string;
+    let noSetlistArtistId: string;
+
+    beforeAll(async () => {
+      const country = await prisma.country.create({
+        data: { name: countryName, code: `T${topSongsSuffix.slice(0, 1)}` },
+      });
+      countryId = country.id;
+
+      const city = await prisma.city.create({
+        data: { name: cityName, countryId },
+      });
+      cityId = city.id;
+
+      const artist = await prisma.artist.create({
+        data: { name: artistName, slug: artistSlug },
+      });
+      topSongsArtistId = artist.id;
+
+      const otherArtist = await prisma.artist.create({
+        data: { name: otherArtistName, slug: otherArtistSlug },
+      });
+      otherArtistId = otherArtist.id;
+
+      // emptyArtist no tiene shows ni setlists: cubre el caso de artista
+      // existente sin datos ([]).
+      const emptyArtist = await prisma.artist.create({
+        data: { name: emptyArtistName, slug: emptyArtistSlug },
+      });
+      emptyArtistId = emptyArtist.id;
+
+      // noSetlistArtist tiene un show pero sin setlist asociado: también
+      // debe devolver [].
+      const noSetlistArtist = await prisma.artist.create({
+        data: { name: noSetlistArtistName, slug: noSetlistArtistSlug },
+      });
+      noSetlistArtistId = noSetlistArtist.id;
+      await prisma.show.create({
+        data: {
+          artistId: noSetlistArtistId,
+          cityId,
+          date: new Date('2026-05-01T00:00:00.000Z'),
+        },
+      });
+
+      // Shows del artista, con canciones repetidas entre shows ("S!CK" y
+      // "MORE") para ejercitar la suma de apariciones, y un empate de
+      // apariciones ("Alpha" y "CHOKE", ambas con 1) para ejercitar el
+      // desempate por title ASC.
+      const show1 = await prisma.show.create({
+        data: {
+          artistId: topSongsArtistId,
+          cityId,
+          date: new Date('2026-06-01T00:00:00.000Z'),
+        },
+      });
+      const setlist1 = await prisma.setlist.create({
+        data: { showId: show1.id },
+      });
+      await prisma.setlistSong.createMany({
+        data: [
+          { setlistId: setlist1.id, title: 'S!CK', position: 1 },
+          { setlistId: setlist1.id, title: 'MORE', position: 2 },
+          { setlistId: setlist1.id, title: 'CHOKE', position: 3 },
+        ],
+      });
+
+      const show2 = await prisma.show.create({
+        data: {
+          artistId: topSongsArtistId,
+          cityId,
+          date: new Date('2026-07-01T00:00:00.000Z'),
+        },
+      });
+      const setlist2 = await prisma.setlist.create({
+        data: { showId: show2.id },
+      });
+      await prisma.setlistSong.createMany({
+        data: [
+          { setlistId: setlist2.id, title: 'S!CK', position: 1 },
+          { setlistId: setlist2.id, title: 'MORE', position: 2 },
+        ],
+      });
+
+      const show3 = await prisma.show.create({
+        data: {
+          artistId: topSongsArtistId,
+          cityId,
+          date: new Date('2026-08-01T00:00:00.000Z'),
+        },
+      });
+      const setlist3 = await prisma.setlist.create({
+        data: { showId: show3.id },
+      });
+      await prisma.setlistSong.createMany({
+        data: [
+          { setlistId: setlist3.id, title: 'S!CK', position: 1 },
+          { setlistId: setlist3.id, title: 'Alpha', position: 2 },
+        ],
+      });
+
+      // Show y setlist de otro artista: no deben aparecer en las top songs
+      // de topSongsArtist.
+      const otherShow = await prisma.show.create({
+        data: {
+          artistId: otherArtistId,
+          cityId,
+          date: new Date('2026-08-15T00:00:00.000Z'),
+        },
+      });
+      const otherSetlist = await prisma.setlist.create({
+        data: { showId: otherShow.id },
+      });
+      await prisma.setlistSong.create({
+        data: {
+          setlistId: otherSetlist.id,
+          title: 'Other Artist Song',
+          position: 1,
+        },
+      });
+    });
+
+    afterAll(async () => {
+      const artistIds = [
+        topSongsArtistId,
+        otherArtistId,
+        emptyArtistId,
+        noSetlistArtistId,
+      ];
+
+      await prisma.setlistSong.deleteMany({
+        where: { setlist: { show: { artistId: { in: artistIds } } } },
+      });
+      await prisma.setlist.deleteMany({
+        where: { show: { artistId: { in: artistIds } } },
+      });
+      await prisma.show.deleteMany({ where: { artistId: { in: artistIds } } });
+      await prisma.artist.deleteMany({ where: { id: { in: artistIds } } });
+      await prisma.city.deleteMany({ where: { id: cityId } });
+      await prisma.country.deleteMany({ where: { id: countryId } });
+    });
+
+    it('returns 400 when the artistId is not a valid UUID', async () => {
+      await request(app.getHttpServer())
+        .get('/artists/not-a-uuid/stats/songs')
+        .expect(400);
+    });
+
+    it('returns 404 when the artist does not exist', async () => {
+      await request(app.getHttpServer())
+        .get(`/artists/${randomUUID()}/stats/songs`)
+        .expect(404);
+    });
+
+    it('returns [] when the artist has no shows', async () => {
+      const response = await request(app.getHttpServer())
+        .get(`/artists/${emptyArtistId}/stats/songs`)
+        .expect(200);
+
+      expect(response.body).toEqual([]);
+    });
+
+    it('returns [] when the artist has shows but no setlists', async () => {
+      const response = await request(app.getHttpServer())
+        .get(`/artists/${noSetlistArtistId}/stats/songs`)
+        .expect(200);
+
+      expect(response.body).toEqual([]);
+    });
+
+    it('sums appearances across shows, orders by timesPlayed desc with title asc as tiebreak, and excludes other artists', async () => {
+      const response = await request(app.getHttpServer())
+        .get(`/artists/${topSongsArtistId}/stats/songs`)
+        .expect(200);
+
+      expect(response.body).toEqual([
+        { title: 'S!CK', timesPlayed: 3 },
+        { title: 'MORE', timesPlayed: 2 },
+        { title: 'Alpha', timesPlayed: 1 },
+        { title: 'CHOKE', timesPlayed: 1 },
+      ]);
+
+      const titles: string[] = response.body.map(
+        (song: { title: string }) => song.title,
+      );
+      expect(titles).not.toContain('Other Artist Song');
+    });
+
+    it('returns only the other artist song for the other artist', async () => {
+      const response = await request(app.getHttpServer())
+        .get(`/artists/${otherArtistId}/stats/songs`)
+        .expect(200);
+
+      expect(response.body).toEqual([
+        { title: 'Other Artist Song', timesPlayed: 1 },
+      ]);
+    });
+  });
+
   describe('Seed data', () => {
     // Mirrors the idempotent upsert in prisma/seed.ts. Not cleaned up in
     // afterAll: it represents permanent seed data, not a test fixture.

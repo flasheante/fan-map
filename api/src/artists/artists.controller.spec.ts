@@ -9,6 +9,7 @@ describe('ArtistsController', () => {
     findOne: jest.Mock;
     findFans: jest.Mock;
     findStats: jest.Mock;
+    findTopSongs: jest.Mock;
   };
 
   beforeEach(async () => {
@@ -17,6 +18,7 @@ describe('ArtistsController', () => {
       findOne: jest.fn(),
       findFans: jest.fn(),
       findStats: jest.fn(),
+      findTopSongs: jest.fn(),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -80,5 +82,18 @@ describe('ArtistsController', () => {
 
     expect(service.findStats).toHaveBeenCalledWith('artist-1');
     expect(result).toBe(stats);
+  });
+
+  it('gets artist top songs via the service', async () => {
+    const topSongs = [
+      { title: 'S!CK', timesPlayed: 42 },
+      { title: 'MORE', timesPlayed: 38 },
+    ];
+    service.findTopSongs.mockResolvedValue(topSongs);
+
+    const result = await controller.findTopSongs('artist-1');
+
+    expect(service.findTopSongs).toHaveBeenCalledWith('artist-1');
+    expect(result).toBe(topSongs);
   });
 });

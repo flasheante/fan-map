@@ -101,6 +101,31 @@ export class ArtistsService {
       songs: songTitles.size,
     };
   }
+
+  // Canciones más tocadas de un artista: agrupa las SetlistSong de sus shows
+  // por title exacto (no hay catálogo de Song todavía, ver findStats) y
+  // cuenta apariciones con una agregación de Prisma. Orden determinista:
+  // timesPlayed desc y, en empate, title asc.
+  async findTopSongs(artistId: string) {
+    const artist = await this.prisma.artist.findUnique({
+      where: { id: artistId },
+    });
+    if (!artist) {
+      throw new NotFoundException(`Artist ${artistId} not found`);
+    }
+
+    const grouped = await this.prisma.setlistSong.groupBy({
+      by: ['title'],
+      where: { setlist: { show: { artistId } } },
+      _count: { title: true },
+      orderBy: [{ _count: { title: 'desc' } }, { title: 'asc' }],
+    });
+
+    return grouped.map((row) => ({
+      title: row.title,
+      timesPlayed: row._count.title,
+    }));
+  }
 }
 
 function toArtistResponse(artist: Artist) {
