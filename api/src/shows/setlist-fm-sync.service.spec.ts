@@ -49,7 +49,7 @@ describe('SetlistFmSyncService', () => {
           country: { code: 'mx', name: 'Mexico' },
         },
       },
-      set: [],
+      sets: { set: [] },
       url: 'https://www.setlist.fm/setlist/ext-1.html',
       ...overrides,
     };
@@ -291,7 +291,22 @@ describe('SetlistFmSyncService', () => {
 
   it('does not create a setlist when the show has no songs yet', async () => {
     client.getArtistSetlists.mockResolvedValue(
-      page([externalSetlist({ set: [] })]),
+      page([externalSetlist({ sets: { set: [] } })]),
+    );
+
+    const summary = await service.syncTheWarning();
+
+    expect(tx.setlist.create).not.toHaveBeenCalled();
+    expect(summary.setlistsCreated).toBe(0);
+    expect(summary.setlistsUpdated).toBe(0);
+  });
+
+  // Regression test: setlist.fm omits the `sets` field entirely for a
+  // concert with no songs logged yet, rather than sending `sets: { set: [] }`.
+  it('does not create a setlist when the "sets" field is missing entirely', async () => {
+    const { sets: _sets, ...withoutSets } = externalSetlist();
+    client.getArtistSetlists.mockResolvedValue(
+      page([withoutSets as SetlistFmSetlist]),
     );
 
     const summary = await service.syncTheWarning();
@@ -305,10 +320,12 @@ describe('SetlistFmSyncService', () => {
     client.getArtistSetlists.mockResolvedValue(
       page([
         externalSetlist({
-          set: [
-            { song: [{ name: 'Qué Más Da' }, { name: 'Automatic Sun' }] },
-            { encore: 1, song: [{ name: 'Choke' }] },
-          ],
+          sets: {
+            set: [
+              { song: [{ name: 'Qué Más Da' }, { name: 'Automatic Sun' }] },
+              { encore: 1, song: [{ name: 'Choke' }] },
+            ],
+          },
         }),
       ]),
     );
@@ -330,7 +347,9 @@ describe('SetlistFmSyncService', () => {
 
   it('replaces the songs of an existing setlist instead of duplicating them', async () => {
     client.getArtistSetlists.mockResolvedValue(
-      page([externalSetlist({ set: [{ song: [{ name: 'New Song' }] }] })]),
+      page([
+        externalSetlist({ sets: { set: [{ song: [{ name: 'New Song' }] }] } }),
+      ]),
     );
     tx.show.findUnique.mockResolvedValue({ id: 'show-1' });
     tx.setlist.findUnique.mockResolvedValue({ id: 'setlist-1' });
@@ -350,7 +369,7 @@ describe('SetlistFmSyncService', () => {
 
   it('is idempotent: running twice does not duplicate shows or setlists', async () => {
     const external = externalSetlist({
-      set: [{ song: [{ name: 'Song A' }] }],
+      sets: { set: [{ song: [{ name: 'Song A' }] }] },
     });
     client.getArtistSetlists.mockResolvedValue(page([external]));
 

@@ -30,7 +30,7 @@ describe('SetlistFmClient', () => {
             country: { code: 'mx', name: 'Mexico' },
           },
         },
-        set: [{ song: [{ name: 'Qué Más Da' }] }],
+        sets: { set: [{ song: [{ name: 'Qué Más Da' }] }] },
         url: 'https://www.setlist.fm/setlist/abc123.html',
       },
     ],

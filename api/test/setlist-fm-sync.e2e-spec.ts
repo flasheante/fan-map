@@ -52,7 +52,9 @@ describe('setlist.fm sync (e2e)', () => {
               },
             },
           },
-          set: [{ song: [{ name: 'First Song' }, { name: 'Second Song' }] }],
+          sets: {
+            set: [{ song: [{ name: 'First Song' }, { name: 'Second Song' }] }],
+          },
           url: 'https://www.setlist.fm/setlist/sync-ext-1.html',
         },
         {
@@ -72,7 +74,7 @@ describe('setlist.fm sync (e2e)', () => {
               },
             },
           },
-          set: [],
+          sets: { set: [] },
           url: 'https://www.setlist.fm/setlist/sync-ext-2.html',
         },
       ],

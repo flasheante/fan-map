@@ -108,7 +108,7 @@ export class SetlistFmSyncService {
           date: parseEventDate(externalSetlist.eventDate),
           venue: externalSetlist.venue.name ?? null,
           externalId: externalSetlist.id,
-          songTitles: flattenSongTitles(externalSetlist.set),
+          songTitles: flattenSongTitles(externalSetlist.sets?.set),
         }),
       );
 
@@ -241,6 +241,6 @@ function parseEventDate(eventDate: string): Date {
 
 // Songs across all sets (regular + encores), in performance order — that
 // order becomes SetlistSong.position, 1-based.
-function flattenSongTitles(sets: SetlistFmSet[]): string[] {
+function flattenSongTitles(sets: SetlistFmSet[] = []): string[] {
   return sets.flatMap((set) => set.song.map((song) => song.name));
 }

@@ -56,8 +56,8 @@ export interface SetlistFmTour {
 }
 
 // One entry of /1.0/artist/{mbid}/setlists. Despite the name, this
-// represents a concert event: `set` may be an empty array when no songs
-// have been logged for it yet.
+// represents a concert event: `sets.set` may be an empty array (or `sets`
+// itself may be omitted) when no songs have been logged for it yet.
 export interface SetlistFmSetlist {
   id: string; // stable across edits — identifies the concert, not the edit
   versionId: string; // changes on every edit of this setlist's content
@@ -66,7 +66,7 @@ export interface SetlistFmSetlist {
   artist: SetlistFmArtist;
   venue: SetlistFmVenue;
   tour?: SetlistFmTour;
-  set: SetlistFmSet[];
+  sets?: { set: SetlistFmSet[] };
   info?: string;
   url: string;
 }
