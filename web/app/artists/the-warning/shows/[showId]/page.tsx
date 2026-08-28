@@ -51,7 +51,7 @@ export default async function TheWarningShowPage({
     <main className="flex min-h-screen w-full flex-col">
       <ShowDetail artist={artist} show={show} />
       <section>
-        <h2 className="px-4 pt-3 text-sm font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+        <h2 className="font-warning px-4 pt-3 text-sm font-bold uppercase tracking-wide text-zinc-400">
           Setlist
         </h2>
         <Setlist songs={setlist.songs} />

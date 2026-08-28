@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { render, screen } from "@testing-library/react";
 import type { ArtistShow } from "@/lib/api";
 import type { TourStats as TourStatsData } from "@/lib/the-warning-tour-stats";
-import { TourStats } from "./tour-stats";
+import { TourStatsRankings, TourStatsSummary } from "./tour-stats";
 
 const SHOW_FIRST_ID = "b1e1a1a1-1111-4111-8111-111111111111";
 const SHOW_LAST_ID = "b2e2a2a2-2222-4222-8222-222222222222";
@@ -105,82 +105,120 @@ function makeStats(overrides: Partial<TourStatsData> = {}): TourStatsData {
   };
 }
 
-describe("TourStats", () => {
+// TourStatsSummary y TourStatsRankings son las dos mitades del antiguo
+// TourStats (ver tour-stats.tsx): la página del Tour Map las separa con el
+// mapa en el medio, pero acá se testean por separado sobre el mismo
+// TourStatsData de arriba.
+describe("TourStatsSummary", () => {
   it("shows the total number of shows", () => {
-    render(<TourStats stats={makeStats()} />);
+    render(<TourStatsSummary stats={makeStats()} />);
 
     expect(screen.getByText("45")).toBeInTheDocument();
     expect(screen.getByText("shows")).toBeInTheDocument();
   });
 
   it("shows the total number of cities", () => {
-    render(<TourStats stats={makeStats()} />);
+    render(<TourStatsSummary stats={makeStats()} />);
 
     expect(screen.getByText("12")).toBeInTheDocument();
     expect(screen.getByText("ciudades")).toBeInTheDocument();
   });
 
   it("shows the total number of countries", () => {
-    render(<TourStats stats={makeStats()} />);
+    render(<TourStatsSummary stats={makeStats()} />);
 
     expect(screen.getByText("3")).toBeInTheDocument();
     expect(screen.getByText("países")).toBeInTheDocument();
   });
 
   it("shows the total number of venues", () => {
-    render(<TourStats stats={makeStats()} />);
+    render(<TourStatsSummary stats={makeStats()} />);
 
     expect(screen.getByText("7")).toBeInTheDocument();
     expect(screen.getByText("venues")).toBeInTheDocument();
   });
 
   it("shows the first show's date and city", () => {
-    render(<TourStats stats={makeStats()} />);
+    render(<TourStatsSummary stats={makeStats()} />);
 
-    // Un único getByText sobre la línea completa: "Monterrey" solo también
-    // aparece en la sección "Ciudades" (citiesRanking), así que buscarlo
-    // suelto sería ambiguo.
     expect(
       screen.getByText(/12 de marzo de 2018 · Monterrey/i),
     ).toBeInTheDocument();
   });
 
   it("shows the last show's date and city", () => {
-    render(<TourStats stats={makeStats()} />);
+    render(<TourStatsSummary stats={makeStats()} />);
 
     expect(screen.getByText(/15 de agosto de 2026/i)).toBeInTheDocument();
     expect(screen.getByText(/mendoza/i)).toBeInTheDocument();
   });
 
   it("shows the country with the most shows and its show count", () => {
-    render(<TourStats stats={makeStats()} />);
+    render(<TourStatsSummary stats={makeStats()} />);
 
-    // Combinado en un solo getByText: "Mexico" solo también aparece en la
-    // sección "Ciudades" (Monterrey es de Mexico), así que buscarlo suelto
-    // sería ambiguo.
     expect(screen.getByText(/Mexico · 9 shows/i)).toBeInTheDocument();
   });
 
   it("shows the city with the most shows and its show count", () => {
-    render(<TourStats stats={makeStats()} />);
+    render(<TourStatsSummary stats={makeStats()} />);
 
     // Combinado en un solo getByText: "Buenos Aires" y "6 shows" por
-    // separado también aparecen en la sección "Ciudades" (citiesRanking),
-    // así que buscarlos sueltos sería ambiguo.
+    // separado también aparecen en TourStatsRankings (citiesRanking), así
+    // que buscarlos sueltos acá sería ambiguo si se testeara junto a ese
+    // componente.
     expect(screen.getByText(/Buenos Aires · 6 shows/i)).toBeInTheDocument();
   });
 
   it("shows the year with the most shows and its show count", () => {
-    render(<TourStats stats={makeStats()} />);
+    render(<TourStatsSummary stats={makeStats()} />);
 
-    // Combinado en un solo getByText: 2022 y "8 shows" por separado también
-    // aparecen como fila de "Shows por año", así que buscarlos sueltos
-    // sería ambiguo.
     expect(screen.getByText(/2022 · 8 shows/)).toBeInTheDocument();
   });
 
+  it("renders a friendly empty state when there are no shows at all", () => {
+    render(<TourStatsSummary stats={EMPTY_STATS} />);
+
+    expect(screen.getAllByText(/0/).length).toBeGreaterThan(0);
+    expect(
+      screen.getAllByText(/todavía no hay shows/i).length,
+    ).toBeGreaterThan(0);
+  });
+
+  it("does not crash and shows placeholders when only firstShow/lastShow are missing", () => {
+    render(
+      <TourStatsSummary stats={makeStats({ firstShow: null, lastShow: null })} />,
+    );
+
+    expect(
+      screen.getAllByText(/todavía no hay shows/i).length,
+    ).toBeGreaterThan(0);
+  });
+
+  it("does not crash and shows placeholders when only topCountry/topCity/topYear are missing", () => {
+    render(
+      <TourStatsSummary
+        stats={makeStats({ topCountry: null, topCity: null, topYear: null })}
+      />,
+    );
+
+    expect(
+      screen.getAllByText(/todavía no hay shows/i).length,
+    ).toBeGreaterThan(0);
+  });
+
+  it("does not render internal UUIDs as visible text", () => {
+    const { container } = render(<TourStatsSummary stats={makeStats()} />);
+
+    expect(container.textContent).not.toContain(SHOW_FIRST_ID);
+    expect(container.textContent).not.toContain(SHOW_LAST_ID);
+    expect(container.textContent).not.toContain(MONTERREY_ID);
+    expect(container.textContent).not.toContain(MENDOZA_ID);
+  });
+});
+
+describe("TourStatsRankings", () => {
   it("shows the shows-by-year breakdown, chronologically", () => {
-    render(<TourStats stats={makeStats()} />);
+    render(<TourStatsRankings stats={makeStats()} />);
 
     const list = screen.getByTestId("shows-by-year");
     const years = Array.from(list.querySelectorAll("[data-testid='year-row']")).map(
@@ -194,7 +232,7 @@ describe("TourStats", () => {
   });
 
   it("shows the cities ranking with city, country and show count", () => {
-    render(<TourStats stats={makeStats()} />);
+    render(<TourStatsRankings stats={makeStats()} />);
 
     const ranking = screen.getByTestId("cities-ranking");
     expect(ranking).toHaveTextContent("Buenos Aires");
@@ -204,7 +242,7 @@ describe("TourStats", () => {
   });
 
   it("links each city in the ranking to its tour history page", () => {
-    render(<TourStats stats={makeStats()} />);
+    render(<TourStatsRankings stats={makeStats()} />);
 
     expect(
       screen.getByRole("link", { name: /buenos aires/i }),
@@ -215,32 +253,7 @@ describe("TourStats", () => {
   });
 
   it("renders a friendly empty state when there are no shows at all", () => {
-    render(<TourStats stats={EMPTY_STATS} />);
-
-    expect(screen.getAllByText(/0/).length).toBeGreaterThan(0);
-    expect(
-      screen.getAllByText(/todavía no hay shows/i).length,
-    ).toBeGreaterThan(0);
-  });
-
-  it("does not crash and shows placeholders when only firstShow/lastShow are missing", () => {
-    render(
-      <TourStats
-        stats={makeStats({ firstShow: null, lastShow: null })}
-      />,
-    );
-
-    expect(
-      screen.getAllByText(/todavía no hay shows/i).length,
-    ).toBeGreaterThan(0);
-  });
-
-  it("does not crash and shows placeholders when only topCountry/topCity/topYear are missing", () => {
-    render(
-      <TourStats
-        stats={makeStats({ topCountry: null, topCity: null, topYear: null })}
-      />,
-    );
+    render(<TourStatsRankings stats={EMPTY_STATS} />);
 
     expect(
       screen.getAllByText(/todavía no hay shows/i).length,
@@ -249,7 +262,9 @@ describe("TourStats", () => {
 
   it("shows a placeholder instead of empty lists when showsByYear/citiesRanking are empty", () => {
     render(
-      <TourStats stats={makeStats({ showsByYear: [], citiesRanking: [] })} />,
+      <TourStatsRankings
+        stats={makeStats({ showsByYear: [], citiesRanking: [] })}
+      />,
     );
 
     expect(screen.queryByTestId("shows-by-year")).not.toBeInTheDocument();
@@ -260,13 +275,10 @@ describe("TourStats", () => {
   });
 
   it("does not render internal UUIDs as visible text", () => {
-    const { container } = render(<TourStats stats={makeStats()} />);
+    const { container } = render(<TourStatsRankings stats={makeStats()} />);
 
-    expect(container.textContent).not.toContain(SHOW_FIRST_ID);
-    expect(container.textContent).not.toContain(SHOW_LAST_ID);
-    expect(container.textContent).not.toContain(MONTERREY_ID);
-    expect(container.textContent).not.toContain(MENDOZA_ID);
     expect(container.textContent).not.toContain(BUENOS_AIRES_ID);
+    expect(container.textContent).not.toContain(MONTERREY_ID);
     expect(container.textContent).not.toContain(MEXICO_COUNTRY_ID);
   });
 });

@@ -348,20 +348,20 @@ describe("TheWarningArtistPage", () => {
       fans: [],
     });
 
-    expect(screen.getByAltText("The Warning")).toHaveAttribute(
+    expect(screen.getByAltText("Foto de The Warning")).toHaveAttribute(
       "src",
       "https://example.com/the-warning.jpg",
     );
   });
 
-  it("doesn't render an image when imageUrl is null", async () => {
+  it("doesn't render an avatar image when imageUrl is null", async () => {
     await renderPage({
       status: "ok",
       artist: makeArtist({ imageUrl: null }),
       fans: [],
     });
 
-    expect(screen.queryByRole("img")).not.toBeInTheDocument();
+    expect(screen.queryByAltText("Foto de The Warning")).not.toBeInTheDocument();
   });
 
   it("shows the count of visible fans", async () => {

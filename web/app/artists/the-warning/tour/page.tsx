@@ -1,7 +1,8 @@
 import { BackToTheWarningLink } from "@/components/artists/back-link";
+import { TheWarningLogo } from "@/components/artists/the-warning-logo";
 import { TourBreadcrumbs } from "@/components/artists/tour-breadcrumbs";
 import { TourMapLoader } from "@/components/artists/tour-map-loader";
-import { TourStats } from "@/components/artists/tour-stats";
+import { TourStatsRankings, TourStatsSummary } from "@/components/artists/tour-stats";
 import { getTheWarningTourMapData } from "@/lib/the-warning-tour-map";
 import { calculateTourStats } from "@/lib/the-warning-tour-stats";
 
@@ -39,24 +40,30 @@ export default async function TourMapPage() {
 
   return (
     <main className="flex h-screen w-full flex-col overflow-y-auto">
-      <div className="border-b px-4 py-2">
+      <div className="border-b border-zinc-800 px-4 py-2">
         <TourBreadcrumbs level="tour" artistName={artist.name} />
       </div>
-      <header className="flex flex-wrap items-center justify-between gap-4 border-b px-4 py-3">
-        <h1 className="text-lg font-semibold">{artist.name} Tour Map</h1>
-        <p className="text-sm text-zinc-600 dark:text-zinc-400">
-          {cities.length} {cities.length === 1 ? "ciudad" : "ciudades"}
+      <header className="flex flex-wrap items-center justify-between gap-4 border-b border-zinc-800 px-4 py-3">
+        <h1 className="flex items-center gap-3">
+          <TheWarningLogo height={28} />
+          <span className="font-warning text-sm font-bold uppercase tracking-wide text-zinc-400">
+            Tour Map
+          </span>
+        </h1>
+        <p className="text-sm text-zinc-400">
+          {stats.totalCities} {stats.totalCities === 1 ? "ciudad" : "ciudades"}
         </p>
       </header>
-      <TourStats stats={stats} />
+      <TourStatsSummary stats={stats} />
       <div className="min-h-[60vh] flex-1">
         <TourMapLoader cities={cities} />
       </div>
       {cities.length === 0 && (
-        <p className="border-t px-4 py-3 text-center text-sm text-zinc-600 dark:text-zinc-400">
+        <p className="border-t border-zinc-800 px-4 py-3 text-center text-sm text-zinc-400">
           Todavía no hay ciudades con shows de {artist.name} en el mapa.
         </p>
       )}
+      <TourStatsRankings stats={stats} />
     </main>
   );
 }

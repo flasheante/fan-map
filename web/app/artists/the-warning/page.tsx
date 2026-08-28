@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ArtistStatsSummary } from "@/components/artists/artist-stats";
 import { ShowsList } from "@/components/artists/shows-list";
+import { TheWarningLogo } from "@/components/artists/the-warning-logo";
 import { TopSongs } from "@/components/artists/top-songs";
 import { FanMapLoader } from "@/components/map/fan-map-loader";
 import { getArtists } from "@/lib/api";
@@ -76,33 +77,35 @@ export default async function TheWarningArtistPage() {
 
   return (
     <main className="flex h-screen w-full flex-col">
-      <header className="flex flex-wrap items-center justify-between gap-4 border-b px-4 py-3">
+      <header className="flex flex-wrap items-center justify-between gap-4 border-b border-zinc-800 px-4 py-3">
         <div className="flex items-center gap-3">
           {artist.imageUrl && (
             // eslint-disable-next-line @next/next/no-img-element -- imageUrl es un dominio arbitrario, no configurado en next/image
             <img
               src={artist.imageUrl}
-              alt={artist.name}
+              alt={`Foto de ${artist.name}`}
               className="h-12 w-12 rounded-full object-cover"
             />
           )}
           <div>
-            <h1 className="text-lg font-semibold">{artist.name}</h1>
-            <p className="text-sm text-zinc-600 dark:text-zinc-400">
+            <h1>
+              <TheWarningLogo height={28} />
+            </h1>
+            <p className="text-sm text-zinc-400">
               {fans.length} {fans.length === 1 ? "fan" : "fans"} en el mapa
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="font-warning flex items-center gap-3 text-sm font-bold uppercase tracking-wide">
           <Link
             href="/artists/the-warning/tour"
-            className="rounded-full border border-foreground px-5 py-2.5 text-sm font-medium transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-900"
+            className="rounded-full border border-white px-5 py-2.5 transition-colors hover:bg-zinc-900"
           >
-            HISTORIAL DE SHOWS
+            Historial de shows
           </Link>
           <Link
             href="/join"
-            className="rounded-full bg-foreground px-5 py-2.5 text-sm font-medium text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc]"
+            className="rounded-full bg-white px-5 py-2.5 text-black transition-colors hover:bg-zinc-200"
           >
             Join the FanMap
           </Link>
@@ -113,18 +116,18 @@ export default async function TheWarningArtistPage() {
         <FanMapLoader fans={fans} />
       </div>
       {fans.length === 0 && (
-        <p className="border-t px-4 py-3 text-center text-sm text-zinc-600 dark:text-zinc-400">
+        <p className="border-t border-zinc-800 px-4 py-3 text-center text-sm text-zinc-400">
           Todavía no hay fans de {artist.name} en el mapa. ¡Sumate y sé el
           primero!
         </p>
       )}
-      <section className="max-h-64 overflow-y-auto border-t">
-        <h2 className="px-4 pt-3 text-sm font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+      <section className="max-h-64 overflow-y-auto border-t border-zinc-800">
+        <h2 className="font-warning px-4 pt-3 text-sm font-bold uppercase tracking-wide text-zinc-400">
           Shows
         </h2>
         <ShowsList shows={shows} />
       </section>
-      <div className="max-h-64 overflow-y-auto border-t">
+      <div className="max-h-64 overflow-y-auto border-t border-zinc-800">
         <TopSongs topSongs={topSongs} />
       </div>
     </main>

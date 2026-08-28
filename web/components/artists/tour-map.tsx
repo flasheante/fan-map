@@ -12,17 +12,10 @@ import {
 import L, { type LatLngBoundsExpression, type LatLngTuple } from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { getTourCityDateRange, type TourCity } from "@/lib/the-warning-tour-map";
+import { formatShowDate } from "@/lib/format-show-date";
 
 const DEFAULT_ZOOM = 2;
 const SINGLE_CITY_ZOOM = 10;
-
-// timeZone: "UTC" porque show.date llega como medianoche UTC (fecha sin
-// hora real asociada); formatear en el huso del navegador podría correr el
-// día mostrado. Mismo formatter que ShowsList / ShowDetail.
-const dateFormatter = new Intl.DateTimeFormat("es-AR", {
-  dateStyle: "long",
-  timeZone: "UTC",
-});
 
 function FitBounds({ cities }: { cities: TourCity[] }) {
   const map = useMap();
@@ -108,11 +101,11 @@ export function TourMap({ cities }: TourMapProps) {
                   </span>
                   {firstShow && lastShow ? (
                     showCount === 1 ? (
-                      <span>{dateFormatter.format(new Date(firstShow.date))}</span>
+                      <span>{formatShowDate(firstShow.date)}</span>
                     ) : (
                       <span>
-                        {dateFormatter.format(new Date(firstShow.date))} →{" "}
-                        {dateFormatter.format(new Date(lastShow.date))}
+                        {formatShowDate(firstShow.date)} →{" "}
+                        {formatShowDate(lastShow.date)}
                       </span>
                     )
                   ) : (
@@ -129,7 +122,7 @@ export function TourMap({ cities }: TourMapProps) {
                     <span className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
                       Último show
                     </span>
-                    <span>{dateFormatter.format(new Date(lastShow.date))}</span>
+                    <span>{formatShowDate(lastShow.date)}</span>
                     <span>
                       {lastShow.venue ?? "Venue a confirmar"} · {city.name}
                     </span>

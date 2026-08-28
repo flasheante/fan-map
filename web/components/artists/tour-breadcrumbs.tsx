@@ -65,24 +65,21 @@ export function TourBreadcrumbs(props: TourBreadcrumbsProps) {
 
   return (
     <nav aria-label="Breadcrumb" className="min-w-0">
-      <ol className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 text-sm">
+      <ol className="font-warning flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 text-sm uppercase tracking-wide">
         {links.map((link) => (
           <li key={link.href} className="flex items-center gap-x-1.5">
             <Link
               href={link.href}
-              className="font-medium text-zinc-600 underline underline-offset-2 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
+              className="font-bold text-zinc-400 underline underline-offset-2 hover:text-zinc-100"
             >
               {link.label}
             </Link>
-            <span aria-hidden="true" className="text-zinc-400 dark:text-zinc-600">
+            <span aria-hidden="true" className="text-zinc-600">
               /
             </span>
           </li>
         ))}
-        <li
-          aria-current="page"
-          className="truncate font-semibold text-zinc-900 dark:text-zinc-100"
-        >
+        <li aria-current="page" className="truncate font-bold text-zinc-100">
           {current}
         </li>
       </ol>
