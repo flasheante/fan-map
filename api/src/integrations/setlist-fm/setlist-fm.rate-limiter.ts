@@ -39,8 +39,9 @@ export class SetlistFmRateLimiter {
   private queue: Promise<void> = Promise.resolve();
 
   constructor(options: SetlistFmRateLimiterOptions = {}) {
-    const maxRequestsPerSecond =
-      options.maxRequestsPerSecond ?? SETLIST_FM_MAX_REQUESTS_PER_SECOND;
+    const maxRequestsPerSecond = isValidRate(options.maxRequestsPerSecond)
+      ? options.maxRequestsPerSecond
+      : SETLIST_FM_MAX_REQUESTS_PER_SECOND;
     this.minIntervalMs = 1000 / maxRequestsPerSecond;
     this.maxRequestsPerDay =
       options.maxRequestsPerDay ?? SETLIST_FM_MAX_REQUESTS_PER_DAY;
@@ -94,4 +95,12 @@ export class SetlistFmRateLimiter {
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// Guards against any maxRequestsPerSecond that would make 1000/x an invalid
+// or nonsensical interval (NaN, 0, negative, or +/-Infinity) — undefined
+// (the "not provided" case) is also rejected here, so the caller above falls
+// back to the 2 req/s default in exactly one place.
+function isValidRate(value: number | undefined): value is number {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0;
 }
