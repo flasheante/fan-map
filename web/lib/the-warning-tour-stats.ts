@@ -16,14 +16,23 @@ export interface TopCity {
   showCount: number;
 }
 
+export interface YearCount {
+  year: number;
+  showCount: number;
+}
+
 export interface TourStats {
   totalShows: number;
   totalCities: number;
   totalCountries: number;
+  totalVenues: number;
   firstShow: ArtistShow | null;
   lastShow: ArtistShow | null;
   topCountry: TopCountry | null;
   topCity: TopCity | null;
+  topYear: YearCount | null;
+  showsByYear: YearCount[];
+  citiesRanking: TopCity[];
 }
 
 function findFirstAndLastShow(shows: ArtistShow[]): {
@@ -44,14 +53,19 @@ function findFirstAndLastShow(shows: ArtistShow[]): {
   return { firstShow: byDateAsc[0], lastShow: byDateAsc[byDateAsc.length - 1] };
 }
 
-// Desempate alfabético por nombre cuando dos entradas tienen el mismo
-// showCount (ver calculateTourStats): showCount desc, nombre asc.
-function byShowCountThenName<T extends { name: string; showCount: number }>(
-  a: T,
-  b: T,
-): number {
-  if (b.showCount !== a.showCount) return b.showCount - a.showCount;
-  return a.name.localeCompare(b.name);
+// Desempate determinista y documentado (ver
+// the-warning-tour-stats.test.ts): 1) mayor showCount, 2) en empate, orden
+// ascendente por `key` — alfabético para nombres de país/ciudad, numérico
+// para el año (que no tiene alfabeto: el más temprano es su análogo).
+function byShowCountThenKey<T extends { showCount: number }>(
+  key: (item: T) => string | number,
+) {
+  return (a: T, b: T): number => {
+    if (b.showCount !== a.showCount) return b.showCount - a.showCount;
+    const [ka, kb] = [key(a), key(b)];
+    if (typeof ka === "number" && typeof kb === "number") return ka - kb;
+    return String(ka).localeCompare(String(kb));
+  };
 }
 
 function findTopCountry(shows: ArtistShow[]): TopCountry | null {
@@ -68,12 +82,15 @@ function findTopCountry(shows: ArtistShow[]): TopCountry | null {
     }
   }
 
-  return Array.from(byId.values()).sort(byShowCountThenName)[0];
+  return Array.from(byId.values()).sort(byShowCountThenKey((c) => c.name))[0];
 }
 
-function findTopCity(shows: ArtistShow[]): TopCity | null {
-  if (shows.length === 0) return null;
-
+// Ranking completo de ciudades por show count desc (ver
+// the-warning-tour-stats.test.ts, describe "citiesRanking"): topCity es
+// simplemente su primer elemento. Se agrupa por city.id, no por nombre: dos
+// ciudades homónimas de países distintos (p.ej. "Santiago" en Chile y en
+// México, ambas en el catálogo sembrado de la API) cuentan por separado.
+function findCitiesRanking(shows: ArtistShow[]): TopCity[] {
   const byId = new Map<string, TopCity>();
   for (const show of shows) {
     const { city } = show;
@@ -90,7 +107,40 @@ function findTopCity(shows: ArtistShow[]): TopCity | null {
     }
   }
 
-  return Array.from(byId.values()).sort(byShowCountThenName)[0];
+  return Array.from(byId.values()).sort(byShowCountThenKey((c) => c.name));
+}
+
+// Cuenta venues distintos por texto (trim, ignora null/vacío): el dominio
+// todavía no tiene un catálogo de Venue propio (ver Show.venue en
+// prisma/schema.prisma), así que es un best-effort sobre el nombre tal cual
+// llega de setlist.fm.
+function findTotalVenues(shows: ArtistShow[]): number {
+  const venues = new Set<string>();
+  for (const show of shows) {
+    const venue = show.venue?.trim();
+    if (venue) venues.add(venue);
+  }
+  return venues.size;
+}
+
+// show.date llega como medianoche UTC (ver tour-stats.tsx / dateFormatter,
+// mismo criterio ahí): el año se deriva en UTC para no correrse de año
+// según la timezone del navegador/proceso que hace el cálculo.
+function findShowsByYear(shows: ArtistShow[]): YearCount[] {
+  const byYear = new Map<number, number>();
+  for (const show of shows) {
+    const year = new Date(show.date).getUTCFullYear();
+    byYear.set(year, (byYear.get(year) ?? 0) + 1);
+  }
+
+  return Array.from(byYear.entries())
+    .map(([year, showCount]) => ({ year, showCount }))
+    .sort((a, b) => a.year - b.year);
+}
+
+function findTopYear(showsByYear: YearCount[]): YearCount | null {
+  if (showsByYear.length === 0) return null;
+  return [...showsByYear].sort(byShowCountThenKey((y) => y.year))[0];
 }
 
 // Función pura: no hace fetch, sólo deriva estadísticas de una colección de
@@ -103,15 +153,21 @@ export function calculateTourStats(shows: ArtistShow[]): TourStats {
   const cityIds = new Set(shows.map((show) => show.city.id));
   const countryIds = new Set(shows.map((show) => show.city.country.id));
   const { firstShow, lastShow } = findFirstAndLastShow(shows);
+  const citiesRanking = findCitiesRanking(shows);
+  const showsByYear = findShowsByYear(shows);
 
   return {
     totalShows: shows.length,
     totalCities: cityIds.size,
     totalCountries: countryIds.size,
+    totalVenues: findTotalVenues(shows),
     firstShow,
     lastShow,
     topCountry: findTopCountry(shows),
-    topCity: findTopCity(shows),
+    topCity: citiesRanking[0] ?? null,
+    topYear: findTopYear(showsByYear),
+    showsByYear,
+    citiesRanking,
   };
 }
 
