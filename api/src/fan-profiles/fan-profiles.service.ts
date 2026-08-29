@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -24,7 +25,11 @@ const FAN_PROFILE_INCLUDE = {
 export class FanProfilesService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async create(dto: CreateFanProfileDto) {
+  // El User asociado ya existe: lo garantiza SessionAuthGuard (userId viene
+  // de request.user.id, resuelto de una sesión válida) — ver
+  // FanProfilesController#create. Esta capa no crea ni busca User por
+  // email; esa responsabilidad es de Auth (AuthService#findOrCreateFromGoogle).
+  async create(userId: string, dto: CreateFanProfileDto) {
     const city = await this.prisma.city.findUnique({
       where: { id: dto.cityId },
     });
@@ -32,31 +37,27 @@ export class FanProfilesService {
       throw new BadRequestException(`City ${dto.cityId} not found`);
     }
 
-    const existingUser = await this.prisma.user.findUnique({
-      where: { email: dto.email },
+    const existingProfile = await this.prisma.fanProfile.findUnique({
+      where: { userId },
     });
-    if (existingUser) {
-      throw new ConflictException(`Email ${dto.email} is already in use`);
+    if (existingProfile) {
+      throw new ConflictException('User already has a fan profile');
     }
 
     const artistIds = dto.artistIds ? Array.from(new Set(dto.artistIds)) : [];
     await this.validateArtistsExist(artistIds);
 
-    const fanProfile = (await this.prisma.$transaction(async (tx) => {
-      const user = await tx.user.create({ data: { email: dto.email } });
-
-      return tx.fanProfile.create({
-        data: {
-          userId: user.id,
-          cityId: dto.cityId,
-          displayName: dto.displayName,
-          showOnMap: dto.showOnMap ?? false,
-          artists: {
-            create: artistIds.map((artistId) => ({ artistId })),
-          },
+    const fanProfile = (await this.prisma.fanProfile.create({
+      data: {
+        userId,
+        cityId: dto.cityId,
+        displayName: dto.displayName,
+        showOnMap: dto.showOnMap ?? false,
+        artists: {
+          create: artistIds.map((artistId) => ({ artistId })),
         },
-        include: FAN_PROFILE_INCLUDE,
-      });
+      },
+      include: FAN_PROFILE_INCLUDE,
     })) as FanProfileWithRelations;
 
     return toFanProfileResponse(fanProfile);
@@ -96,12 +97,36 @@ export class FanProfilesService {
     return toFanProfileResponse(fanProfile);
   }
 
-  async update(id: string, dto: UpdateFanProfileDto) {
+  // Etapa 3: soporte de GET /fan-profiles/me — el FanProfile del User
+  // autenticado (request.user.id), nunca de un :id de la URL. userId es
+  // @unique en el modelo, así que esto es un lookup 1:1 como findOne.
+  async findMine(userId: string) {
+    const fanProfile = (await this.prisma.fanProfile.findUnique({
+      where: { userId },
+      include: FAN_PROFILE_INCLUDE,
+    })) as FanProfileWithRelations | null;
+
+    if (!fanProfile) {
+      throw new NotFoundException('Fan profile not found');
+    }
+
+    return toFanProfileResponse(fanProfile);
+  }
+
+  // Etapa 4 (hardening): antes cualquiera podía PATCHear cualquier
+  // FanProfile por id, sin sesión ni ownership check. userId viene de
+  // request.user.id (SessionAuthGuard, ver controller) y se valida ANTES
+  // que cityId/artistIds — fail fast, sin filtrarle a quien no es dueño si
+  // el resto del payload era válido.
+  async update(id: string, userId: string, dto: UpdateFanProfileDto) {
     const existing = await this.prisma.fanProfile.findUnique({
       where: { id },
     });
     if (!existing) {
       throw new NotFoundException(`FanProfile ${id} not found`);
+    }
+    if (existing.userId !== userId) {
+      throw new ForbiddenException('You do not own this fan profile');
     }
 
     if (dto.cityId !== undefined) {

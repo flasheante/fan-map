@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
 import { FanProfilesService } from './fan-profiles.service';
@@ -11,23 +12,23 @@ describe('FanProfilesService', () => {
   let service: FanProfilesService;
   let prisma: {
     city: { findUnique: jest.Mock };
-    user: { findUnique: jest.Mock };
     artist: { findMany: jest.Mock };
     fanProfile: {
       findUnique: jest.Mock;
       findMany: jest.Mock;
+      create: jest.Mock;
       update: jest.Mock;
     };
     $transaction: jest.Mock;
   };
   let tx: {
-    user: { create: jest.Mock };
-    fanProfile: { create: jest.Mock; update: jest.Mock };
+    fanProfile: { update: jest.Mock };
     fanArtist: { deleteMany: jest.Mock; createMany: jest.Mock };
   };
 
+  const userId = 'user-1';
+
   const dto = {
-    email: 'fan@example.com',
     displayName: 'Fan Name',
     cityId: 'city-1',
   };
@@ -57,10 +58,9 @@ describe('FanProfilesService', () => {
     updatedAt: new Date('2026-01-01T00:00:00.000Z'),
   };
 
-  const createdUser = { id: 'user-1', email: dto.email };
   const createdFanProfile = {
     id: 'profile-1',
-    userId: 'user-1',
+    userId,
     cityId: 'city-1',
     displayName: 'Fan Name',
     showOnMap: false,
@@ -106,9 +106,7 @@ describe('FanProfilesService', () => {
 
   beforeEach(async () => {
     tx = {
-      user: { create: jest.fn().mockResolvedValue(createdUser) },
       fanProfile: {
-        create: jest.fn().mockResolvedValue(createdFanProfile),
         update: jest.fn().mockResolvedValue(createdFanProfile),
       },
       fanArtist: {
@@ -119,7 +117,6 @@ describe('FanProfilesService', () => {
 
     prisma = {
       city: { findUnique: jest.fn().mockResolvedValue(city) },
-      user: { findUnique: jest.fn().mockResolvedValue(null) },
       artist: {
         findMany: jest.fn().mockResolvedValue([artistA]),
       },
@@ -128,6 +125,7 @@ describe('FanProfilesService', () => {
         findMany: jest
           .fn()
           .mockResolvedValue([createdFanProfile, secondFanProfile]),
+        create: jest.fn().mockResolvedValue(createdFanProfile),
         update: jest.fn().mockResolvedValue(createdFanProfile),
       },
       $transaction: jest.fn().mockImplementation((callback) => callback(tx)),
@@ -143,157 +141,187 @@ describe('FanProfilesService', () => {
     service = module.get<FanProfilesService>(FanProfilesService);
   });
 
-  // Case 2: Crea User y FanProfile.
-  it('creates the User and the FanProfile inside a transaction', async () => {
-    await service.create(dto);
-
-    expect(prisma.$transaction).toHaveBeenCalled();
-    expect(tx.user.create).toHaveBeenCalledWith({
-      data: { email: dto.email },
+  describe('create', () => {
+    beforeEach(() => {
+      // Sin conflicto por defecto: el User autenticado todavía no tiene
+      // FanProfile (ver chequeo de unicidad en el service).
+      prisma.fanProfile.findUnique.mockResolvedValue(null);
     });
-    expect(tx.fanProfile.create).toHaveBeenCalledWith({
-      data: {
-        userId: createdUser.id,
-        cityId: dto.cityId,
-        displayName: dto.displayName,
-        showOnMap: false,
-        artists: { create: [] },
-      },
-      include: {
-        city: { include: { country: true } },
-        artists: { include: { artist: true }, orderBy: { artist: { name: 'asc' } } },
-      },
-    });
-  });
 
-  // Case 3: showOnMap por defecto es false.
-  it('defaults showOnMap to false when not provided', async () => {
-    await service.create(dto);
+    // Case 2 & 3 (Etapa 2): crea el FanProfile para el User autenticado, sin
+    // crear ningún User — esa responsabilidad es de Auth.
+    it('creates the FanProfile for the given userId', async () => {
+      await service.create(userId, dto);
 
-    expect(tx.fanProfile.create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({ showOnMap: false }),
-      }),
-    );
-  });
-
-  it('uses the provided showOnMap value when given', async () => {
-    await service.create({ ...dto, showOnMap: true });
-
-    expect(tx.fanProfile.create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({ showOnMap: true }),
-      }),
-    );
-  });
-
-  // Case 4 & 10: la respuesta no incluye email/userId, e incluye city y country.
-  it('returns a response without email or userId, including city and country', async () => {
-    const result = await service.create(dto);
-
-    expect(result).toEqual({
-      id: createdFanProfile.id,
-      displayName: createdFanProfile.displayName,
-      showOnMap: createdFanProfile.showOnMap,
-      createdAt: createdFanProfile.createdAt,
-      updatedAt: createdFanProfile.updatedAt,
-      city: {
-        id: city.id,
-        name: city.name,
-        latitude: city.latitude,
-        longitude: city.longitude,
-        country: { id: 'country-1', name: 'Argentina', code: 'AR' },
-      },
-      artists: [
-        { id: artistA.id, name: artistA.name, slug: artistA.slug, imageUrl: artistA.imageUrl },
-      ],
-    });
-    expect(result).not.toHaveProperty('userId');
-    expect(result).not.toHaveProperty('email');
-  });
-
-  // Case 5: cityId inexistente devuelve 400.
-  it('throws BadRequestException when the city does not exist', async () => {
-    prisma.city.findUnique.mockResolvedValue(null);
-
-    await expect(service.create(dto)).rejects.toThrow(BadRequestException);
-    expect(prisma.$transaction).not.toHaveBeenCalled();
-  });
-
-  // Case 6: email duplicado devuelve 409.
-  it('throws ConflictException when the email is already in use', async () => {
-    prisma.user.findUnique.mockResolvedValue({ id: 'existing', ...dto });
-
-    await expect(service.create(dto)).rejects.toThrow(ConflictException);
-    expect(prisma.$transaction).not.toHaveBeenCalled();
-  });
-
-  describe('create with artistIds', () => {
-    it('creates FanArtist rows for the given artistIds', async () => {
-      prisma.artist.findMany.mockResolvedValue([artistA, artistB]);
-
-      await service.create({ ...dto, artistIds: [artistA.id, artistB.id] });
-
-      expect(prisma.artist.findMany).toHaveBeenCalledWith({
-        where: { id: { in: [artistA.id, artistB.id] } },
-        select: { id: true },
+      expect(prisma.fanProfile.create).toHaveBeenCalledWith({
+        data: {
+          userId,
+          cityId: dto.cityId,
+          displayName: dto.displayName,
+          showOnMap: false,
+          artists: { create: [] },
+        },
+        include: {
+          city: { include: { country: true } },
+          artists: { include: { artist: true }, orderBy: { artist: { name: 'asc' } } },
+        },
       });
-      expect(tx.fanProfile.create).toHaveBeenCalledWith(
+    });
+
+    // Case 4: POST /fan-profiles ya no crea/upsertea ningún User. El mock de
+    // PrismaService no tiene `user` en absoluto: si el service intentara
+    // llamar a `this.prisma.user.findUnique/create/upsert`, esto explotaría
+    // con un TypeError en vez de resolver.
+    it('does not create or look up a User', async () => {
+      expect(prisma).not.toHaveProperty('user');
+
+      await expect(service.create(userId, dto)).resolves.toBeDefined();
+    });
+
+    // Case 3: showOnMap por defecto es false.
+    it('defaults showOnMap to false when not provided', async () => {
+      await service.create(userId, dto);
+
+      expect(prisma.fanProfile.create).toHaveBeenCalledWith(
         expect.objectContaining({
-          data: expect.objectContaining({
-            artists: { create: [{ artistId: artistA.id }, { artistId: artistB.id }] },
-          }),
+          data: expect.objectContaining({ showOnMap: false }),
         }),
       );
     });
 
-    it('creates no FanArtist rows when artistIds is not provided', async () => {
-      await service.create(dto);
+    it('uses the provided showOnMap value when given', async () => {
+      await service.create(userId, { ...dto, showOnMap: true });
 
-      expect(prisma.artist.findMany).not.toHaveBeenCalled();
-      expect(tx.fanProfile.create).toHaveBeenCalledWith(
+      expect(prisma.fanProfile.create).toHaveBeenCalledWith(
         expect.objectContaining({
-          data: expect.objectContaining({ artists: { create: [] } }),
+          data: expect.objectContaining({ showOnMap: true }),
         }),
       );
     });
 
-    it('creates no FanArtist rows when artistIds is an empty array', async () => {
-      await service.create({ ...dto, artistIds: [] });
+    // Case 4 & 10: la respuesta no incluye email/userId, e incluye city y country.
+    it('returns a response without email or userId, including city and country', async () => {
+      const result = await service.create(userId, dto);
 
-      expect(prisma.artist.findMany).not.toHaveBeenCalled();
-      expect(tx.fanProfile.create).toHaveBeenCalledWith(
-        expect.objectContaining({
-          data: expect.objectContaining({ artists: { create: [] } }),
-        }),
-      );
-    });
-
-    it('deduplicates repeated artistIds before validating and creating', async () => {
-      prisma.artist.findMany.mockResolvedValue([artistA]);
-
-      await service.create({ ...dto, artistIds: [artistA.id, artistA.id] });
-
-      expect(prisma.artist.findMany).toHaveBeenCalledWith({
-        where: { id: { in: [artistA.id] } },
-        select: { id: true },
+      expect(result).toEqual({
+        id: createdFanProfile.id,
+        displayName: createdFanProfile.displayName,
+        showOnMap: createdFanProfile.showOnMap,
+        createdAt: createdFanProfile.createdAt,
+        updatedAt: createdFanProfile.updatedAt,
+        city: {
+          id: city.id,
+          name: city.name,
+          latitude: city.latitude,
+          longitude: city.longitude,
+          country: { id: 'country-1', name: 'Argentina', code: 'AR' },
+        },
+        artists: [
+          { id: artistA.id, name: artistA.name, slug: artistA.slug, imageUrl: artistA.imageUrl },
+        ],
       });
-      expect(tx.fanProfile.create).toHaveBeenCalledWith(
-        expect.objectContaining({
-          data: expect.objectContaining({
-            artists: { create: [{ artistId: artistA.id }] },
-          }),
-        }),
-      );
+      expect(result).not.toHaveProperty('userId');
+      expect(result).not.toHaveProperty('email');
     });
 
-    it('throws BadRequestException when an artistId does not reference an existing artist', async () => {
-      prisma.artist.findMany.mockResolvedValue([artistA]);
+    // Case 5: cityId inexistente devuelve 400.
+    it('throws BadRequestException when the city does not exist', async () => {
+      prisma.city.findUnique.mockResolvedValue(null);
 
-      await expect(
-        service.create({ ...dto, artistIds: [artistA.id, 'missing-artist'] }),
-      ).rejects.toThrow(BadRequestException);
-      expect(prisma.$transaction).not.toHaveBeenCalled();
+      await expect(service.create(userId, dto)).rejects.toThrow(
+        BadRequestException,
+      );
+      expect(prisma.fanProfile.create).not.toHaveBeenCalled();
+    });
+
+    // Case 3 (Etapa 2): el User autenticado ya tiene un FanProfile → 409.
+    // Reemplaza el viejo chequeo de email duplicado (ya no aplica: el email
+    // no participa en la creación).
+    it('throws ConflictException when the user already has a fan profile', async () => {
+      prisma.fanProfile.findUnique.mockResolvedValue(createdFanProfile);
+
+      await expect(service.create(userId, dto)).rejects.toThrow(
+        ConflictException,
+      );
+      expect(prisma.fanProfile.create).not.toHaveBeenCalled();
+    });
+
+    describe('create with artistIds', () => {
+      it('creates FanArtist rows for the given artistIds', async () => {
+        prisma.artist.findMany.mockResolvedValue([artistA, artistB]);
+
+        await service.create(userId, {
+          ...dto,
+          artistIds: [artistA.id, artistB.id],
+        });
+
+        expect(prisma.artist.findMany).toHaveBeenCalledWith({
+          where: { id: { in: [artistA.id, artistB.id] } },
+          select: { id: true },
+        });
+        expect(prisma.fanProfile.create).toHaveBeenCalledWith(
+          expect.objectContaining({
+            data: expect.objectContaining({
+              artists: { create: [{ artistId: artistA.id }, { artistId: artistB.id }] },
+            }),
+          }),
+        );
+      });
+
+      it('creates no FanArtist rows when artistIds is not provided', async () => {
+        await service.create(userId, dto);
+
+        expect(prisma.artist.findMany).not.toHaveBeenCalled();
+        expect(prisma.fanProfile.create).toHaveBeenCalledWith(
+          expect.objectContaining({
+            data: expect.objectContaining({ artists: { create: [] } }),
+          }),
+        );
+      });
+
+      it('creates no FanArtist rows when artistIds is an empty array', async () => {
+        await service.create(userId, { ...dto, artistIds: [] });
+
+        expect(prisma.artist.findMany).not.toHaveBeenCalled();
+        expect(prisma.fanProfile.create).toHaveBeenCalledWith(
+          expect.objectContaining({
+            data: expect.objectContaining({ artists: { create: [] } }),
+          }),
+        );
+      });
+
+      it('deduplicates repeated artistIds before validating and creating', async () => {
+        prisma.artist.findMany.mockResolvedValue([artistA]);
+
+        await service.create(userId, {
+          ...dto,
+          artistIds: [artistA.id, artistA.id],
+        });
+
+        expect(prisma.artist.findMany).toHaveBeenCalledWith({
+          where: { id: { in: [artistA.id] } },
+          select: { id: true },
+        });
+        expect(prisma.fanProfile.create).toHaveBeenCalledWith(
+          expect.objectContaining({
+            data: expect.objectContaining({
+              artists: { create: [{ artistId: artistA.id }] },
+            }),
+          }),
+        );
+      });
+
+      it('throws BadRequestException when an artistId does not reference an existing artist', async () => {
+        prisma.artist.findMany.mockResolvedValue([artistA]);
+
+        await expect(
+          service.create(userId, {
+            ...dto,
+            artistIds: [artistA.id, 'missing-artist'],
+          }),
+        ).rejects.toThrow(BadRequestException);
+        expect(prisma.fanProfile.create).not.toHaveBeenCalled();
+      });
     });
   });
 
@@ -348,10 +376,53 @@ describe('FanProfilesService', () => {
     });
   });
 
+  // Etapa 3: GET /fan-profiles/me — resuelve el FanProfile del User
+  // autenticado (request.user.id), no de un :id de la URL. Ver justificación
+  // en el informe: no había forma de obtener esto con los endpoints
+  // existentes sin exponer userId como filtro público.
+  describe('findMine', () => {
+    it('looks up the fan profile by userId and returns it without email or userId', async () => {
+      const result = await service.findMine(userId);
+
+      expect(prisma.fanProfile.findUnique).toHaveBeenCalledWith({
+        where: { userId },
+        include: {
+          city: { include: { country: true } },
+          artists: { include: { artist: true }, orderBy: { artist: { name: 'asc' } } },
+        },
+      });
+      expect(result).toEqual({
+        id: createdFanProfile.id,
+        displayName: createdFanProfile.displayName,
+        showOnMap: createdFanProfile.showOnMap,
+        createdAt: createdFanProfile.createdAt,
+        updatedAt: createdFanProfile.updatedAt,
+        city: {
+          id: city.id,
+          name: city.name,
+          latitude: city.latitude,
+          longitude: city.longitude,
+          country: { id: 'country-1', name: 'Argentina', code: 'AR' },
+        },
+        artists: [
+          { id: artistA.id, name: artistA.name, slug: artistA.slug, imageUrl: artistA.imageUrl },
+        ],
+      });
+      expect(result).not.toHaveProperty('userId');
+      expect(result).not.toHaveProperty('email');
+    });
+
+    it('throws NotFoundException when the authenticated user has no fan profile', async () => {
+      prisma.fanProfile.findUnique.mockResolvedValue(null);
+
+      await expect(service.findMine(userId)).rejects.toThrow(NotFoundException);
+    });
+  });
+
   describe('update', () => {
     // Caso 2: actualiza solamente los campos enviados.
     it('updates only the provided fields when artistIds is not sent', async () => {
-      await service.update(createdFanProfile.id, { displayName: 'New Name' });
+      await service.update(createdFanProfile.id, userId, { displayName: 'New Name' });
 
       expect(prisma.fanProfile.update).toHaveBeenCalledWith({
         where: { id: createdFanProfile.id },
@@ -369,7 +440,7 @@ describe('FanProfilesService', () => {
       const updated = { ...createdFanProfile, displayName: 'New Name' };
       prisma.fanProfile.update.mockResolvedValue(updated);
 
-      const result = await service.update(createdFanProfile.id, {
+      const result = await service.update(createdFanProfile.id, userId, {
         displayName: 'New Name',
       });
 
@@ -385,7 +456,7 @@ describe('FanProfilesService', () => {
       };
       prisma.city.findUnique.mockResolvedValue(newCity);
 
-      await service.update(createdFanProfile.id, { cityId: 'city-2' });
+      await service.update(createdFanProfile.id, userId, { cityId: 'city-2' });
 
       expect(prisma.city.findUnique).toHaveBeenCalledWith({
         where: { id: 'city-2' },
@@ -402,7 +473,7 @@ describe('FanProfilesService', () => {
 
     // Caso 5: puede actualizar showOnMap.
     it('updates showOnMap', async () => {
-      await service.update(createdFanProfile.id, { showOnMap: true });
+      await service.update(createdFanProfile.id, userId, { showOnMap: true });
 
       expect(prisma.fanProfile.update).toHaveBeenCalledWith({
         where: { id: createdFanProfile.id },
@@ -416,7 +487,7 @@ describe('FanProfilesService', () => {
 
     // Caso: puede actualizar varios campos a la vez.
     it('updates multiple fields at once', async () => {
-      await service.update(createdFanProfile.id, {
+      await service.update(createdFanProfile.id, userId, {
         displayName: 'New Name',
         showOnMap: true,
       });
@@ -436,7 +507,7 @@ describe('FanProfilesService', () => {
       prisma.city.findUnique.mockResolvedValue(null);
 
       await expect(
-        service.update(createdFanProfile.id, { cityId: 'missing-city' }),
+        service.update(createdFanProfile.id, userId, { cityId: 'missing-city' }),
       ).rejects.toThrow(BadRequestException);
       expect(prisma.fanProfile.update).not.toHaveBeenCalled();
     });
@@ -446,14 +517,30 @@ describe('FanProfilesService', () => {
       prisma.fanProfile.findUnique.mockResolvedValue(null);
 
       await expect(
-        service.update('missing-id', { displayName: 'New Name' }),
+        service.update('missing-id', userId, { displayName: 'New Name' }),
       ).rejects.toThrow(NotFoundException);
       expect(prisma.fanProfile.update).not.toHaveBeenCalled();
     });
 
+    // Etapa 4 — hallazgo crítico de la auditoría: PATCH no verificaba
+    // ownership. userId viene de request.user.id (ver controller); si no
+    // coincide con el dueño del FanProfile, 403 y ni siquiera se valida
+    // cityId/artistIds (fail fast, sin filtrar info a quien no es dueño).
+    it('throws ForbiddenException when the authenticated user does not own the fan profile', async () => {
+      await expect(
+        service.update(createdFanProfile.id, 'someone-else', {
+          displayName: 'Hijacked Name',
+          cityId: 'city-2',
+        }),
+      ).rejects.toThrow(ForbiddenException);
+      expect(prisma.fanProfile.update).not.toHaveBeenCalled();
+      // Fail fast: ni siquiera llega a validar el cityId enviado.
+      expect(prisma.city.findUnique).not.toHaveBeenCalled();
+    });
+
     // Caso 12 & 13: la respuesta mantiene el shape de GET, sin email ni userId.
     it('returns a response without email or userId, including city, country and artists', async () => {
-      const result = await service.update(createdFanProfile.id, {
+      const result = await service.update(createdFanProfile.id, userId, {
         displayName: 'New Name',
       });
 
@@ -484,7 +571,7 @@ describe('FanProfilesService', () => {
       prisma.artist.findMany.mockResolvedValue([artistA]);
 
       await expect(
-        service.update(createdFanProfile.id, {
+        service.update(createdFanProfile.id, userId, {
           artistIds: [artistA.id, 'missing-artist'],
         }),
       ).rejects.toThrow(BadRequestException);
@@ -497,7 +584,7 @@ describe('FanProfilesService', () => {
     it('replaces the FanArtist rows inside a transaction', async () => {
       prisma.artist.findMany.mockResolvedValue([artistB]);
 
-      await service.update(createdFanProfile.id, { artistIds: [artistB.id] });
+      await service.update(createdFanProfile.id, userId, { artistIds: [artistB.id] });
 
       expect(prisma.$transaction).toHaveBeenCalled();
       expect(tx.fanArtist.deleteMany).toHaveBeenCalledWith({
@@ -517,7 +604,7 @@ describe('FanProfilesService', () => {
     });
 
     it('clears all associations when artistIds is an empty array', async () => {
-      await service.update(createdFanProfile.id, { artistIds: [] });
+      await service.update(createdFanProfile.id, userId, { artistIds: [] });
 
       expect(prisma.artist.findMany).not.toHaveBeenCalled();
       expect(tx.fanArtist.deleteMany).toHaveBeenCalledWith({
@@ -529,7 +616,7 @@ describe('FanProfilesService', () => {
     it('deduplicates repeated artistIds before validating and replacing', async () => {
       prisma.artist.findMany.mockResolvedValue([artistB]);
 
-      await service.update(createdFanProfile.id, {
+      await service.update(createdFanProfile.id, userId, {
         artistIds: [artistB.id, artistB.id],
       });
 
@@ -543,7 +630,7 @@ describe('FanProfilesService', () => {
     });
 
     it('leaves existing associations untouched when artistIds is not sent', async () => {
-      await service.update(createdFanProfile.id, { displayName: 'New Name' });
+      await service.update(createdFanProfile.id, userId, { displayName: 'New Name' });
 
       expect(tx.fanArtist.deleteMany).not.toHaveBeenCalled();
       expect(tx.fanArtist.createMany).not.toHaveBeenCalled();

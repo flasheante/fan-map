@@ -1,39 +1,43 @@
-import { Test, TestingModule } from '@nestjs/testing';
 import { FanProfilesController } from './fan-profiles.controller';
 import { FanProfilesService } from './fan-profiles.service';
 
+// Instanciado directamente (no vía Test.createTestingModule) siguiendo el
+// mismo patrón que auth.controller.spec.ts: @UseGuards(SessionAuthGuard) es
+// metadata de routing que solo se ejercita levantando el pipeline HTTP real,
+// no al construir el controller a mano — ver el 401 sin sesión end-to-end
+// en fan-profiles.e2e-spec.ts.
 describe('FanProfilesController', () => {
   let controller: FanProfilesController;
   let service: {
     create: jest.Mock;
     findOne: jest.Mock;
+    findMine: jest.Mock;
     findAll: jest.Mock;
     update: jest.Mock;
   };
 
-  beforeEach(async () => {
+  beforeEach(() => {
     service = {
       create: jest.fn(),
       findOne: jest.fn(),
+      findMine: jest.fn(),
       findAll: jest.fn(),
       update: jest.fn(),
     };
 
-    const module: TestingModule = await Test.createTestingModule({
-      controllers: [FanProfilesController],
-      providers: [{ provide: FanProfilesService, useValue: service }],
-    }).compile();
-
-    controller = module.get<FanProfilesController>(FanProfilesController);
+    controller = new FanProfilesController(
+      service as unknown as FanProfilesService,
+    );
   });
 
-  // Case 1: creating a valid profile delegates to the service and returns its result.
-  it('creates a fan profile via the service', async () => {
+  // Case 1: creating a valid profile derives the userId from request.user
+  // (populated by SessionAuthGuard) and delegates to the service.
+  it('creates a fan profile via the service, using request.user.id as the userId', async () => {
     const dto = {
-      email: 'fan@example.com',
       displayName: 'Fan Name',
       cityId: 'city-1',
     };
+    const req = { user: { id: 'user-1', email: 'fan@example.com' } } as any;
     const created = {
       id: 'profile-1',
       displayName: 'Fan Name',
@@ -42,10 +46,44 @@ describe('FanProfilesController', () => {
     };
     service.create.mockResolvedValue(created);
 
-    const result = await controller.create(dto);
+    const result = await controller.create(req, dto);
 
-    expect(service.create).toHaveBeenCalledWith(dto);
+    expect(service.create).toHaveBeenCalledWith('user-1', dto);
     expect(result).toBe(created);
+  });
+
+  // Case 5: no acepta userId del body — la firma del método ni siquiera lo
+  // recibe del DTO, solo de request.user.
+  it('ignores any userId present on the request body and uses request.user.id instead', async () => {
+    const dto = {
+      displayName: 'Fan Name',
+      cityId: 'city-1',
+      userId: 'attacker-chosen-user',
+    } as any;
+    const req = { user: { id: 'user-1', email: 'fan@example.com' } } as any;
+    service.create.mockResolvedValue({});
+
+    await controller.create(req, dto);
+
+    expect(service.create).toHaveBeenCalledWith('user-1', dto);
+  });
+
+  // Etapa 3: GET /fan-profiles/me resuelve por request.user.id, nunca por
+  // un :id de la URL — el cliente no puede pedir el perfil de otro user.
+  it('gets the authenticated user\'s own fan profile via the service', async () => {
+    const req = { user: { id: 'user-1', email: 'fan@example.com' } } as any;
+    const found = {
+      id: 'profile-1',
+      displayName: 'Fan Name',
+      showOnMap: false,
+      city: { id: 'city-1', name: 'Buenos Aires', country: {} },
+    };
+    service.findMine.mockResolvedValue(found);
+
+    const result = await controller.findMine(req);
+
+    expect(service.findMine).toHaveBeenCalledWith('user-1');
+    expect(result).toBe(found);
   });
 
   // Case: getting an existing profile delegates to the service and returns its result.
@@ -83,9 +121,11 @@ describe('FanProfilesController', () => {
     expect(result).toBe(list);
   });
 
-  // Case: updating a profile delegates to the service and returns its result.
-  it('updates a fan profile via the service', async () => {
+  // Etapa 4: PATCH delega a request.user.id como owner, igual que POST — el
+  // service es quien decide si ese userId es efectivamente el dueño.
+  it('updates a fan profile via the service, using request.user.id as the owner', async () => {
     const dto = { displayName: 'New Name' };
+    const req = { user: { id: 'user-1', email: 'fan@example.com' } } as any;
     const updated = {
       id: 'profile-1',
       displayName: 'New Name',
@@ -94,9 +134,9 @@ describe('FanProfilesController', () => {
     };
     service.update.mockResolvedValue(updated);
 
-    const result = await controller.update('profile-1', dto);
+    const result = await controller.update(req, 'profile-1', dto);
 
-    expect(service.update).toHaveBeenCalledWith('profile-1', dto);
+    expect(service.update).toHaveBeenCalledWith('profile-1', 'user-1', dto);
     expect(result).toBe(updated);
   });
 });

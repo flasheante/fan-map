@@ -1,7 +1,6 @@
 import {
   IsArray,
   IsBoolean,
-  IsEmail,
   IsNotEmpty,
   IsOptional,
   IsString,
@@ -9,10 +8,12 @@ import {
   MaxLength,
 } from 'class-validator';
 
+// `userId` deliberadamente no es un campo: el User se deriva exclusivamente
+// de request.user.id (poblado por SessionAuthGuard), nunca del body — ver
+// FanProfilesController#create. Antes tampoco existía `userId` acá, pero sí
+// `email`, que cumplía ese mismo rol (elegía/creaba el User); se eliminó por
+// la misma razón al integrar Auth.
 export class CreateFanProfileDto {
-  @IsEmail()
-  email: string;
-
   @IsString()
   @IsNotEmpty()
   @MaxLength(80)

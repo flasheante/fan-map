@@ -1,14 +1,33 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
+import cookieParser from 'cookie-parser';
+import { sign } from 'cookie-signature';
 import request from 'supertest';
 import { App } from 'supertest/types';
 import { randomUUID } from 'crypto';
 import { AppModule } from './../src/app.module';
 import { PrismaService } from './../src/database/prisma.service';
+import { AuthService } from './../src/auth/auth.service';
+import { SessionService } from './../src/auth/session.service';
+import { SESSION_COOKIE_NAME } from './../src/auth/auth.constants';
 
 describe('Artists (e2e)', () => {
   let app: INestApplication<App>;
   let prisma: PrismaService;
+  let authService: AuthService;
+  let sessionService: SessionService;
+
+  // POST /fan-profiles requiere sesión (ver Etapa 2 — integración de
+  // FanProfiles con Auth). Los fixtures de este suite crean fans como
+  // datos de apoyo para los endpoints de Artists, así que necesitan una
+  // sesión real igual que fan-profiles.e2e-spec.ts / auth.e2e-spec.ts, sin
+  // pegarle a Google.
+  const sessionSecret = process.env.SESSION_SECRET ?? 'dev-insecure-session-secret';
+
+  function signedCookieHeader(sessionId: string): string {
+    const signed = `s:${sign(sessionId, sessionSecret)}`;
+    return `${SESSION_COOKIE_NAME}=${encodeURIComponent(signed)}`;
+  }
 
   // Unique-per-run name/slug so this suite is safe to re-run against a
   // database that already has other artists.
@@ -27,9 +46,12 @@ describe('Artists (e2e)', () => {
     app.useGlobalPipes(
       new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }),
     );
+    app.use(cookieParser(sessionSecret));
     await app.init();
 
     prisma = app.get(PrismaService);
+    authService = app.get(AuthService);
+    sessionService = app.get(SessionService);
 
     const artist = await prisma.artist.create({
       data: { name: artistName, slug: artistSlug },
@@ -124,11 +146,23 @@ describe('Artists (e2e)', () => {
     let artistZId: string;
 
     const createdUserEmails: string[] = [];
+    const createdSessionIds: string[] = [];
 
-    function uniqueEmail(label: string) {
+    async function authenticatedUser(label: string) {
       const email = `${label}-${randomUUID()}@example.com`;
       createdUserEmails.push(email);
-      return email;
+
+      const user = await authService.findOrCreateFromGoogle({
+        googleId: `google-${label}-${randomUUID()}`,
+        email,
+        name: label,
+        emailVerified: true,
+      });
+
+      const session = await sessionService.create(user.id);
+      createdSessionIds.push(session.id);
+
+      return signedCookieHeader(session.id);
     }
 
     async function createFan(
@@ -137,11 +171,11 @@ describe('Artists (e2e)', () => {
       showOnMap: boolean,
       fanCityId: string,
     ) {
-      const email = uniqueEmail(label);
+      const cookie = await authenticatedUser(label);
       const response = await request(app.getHttpServer())
         .post('/fan-profiles')
+        .set('Cookie', cookie)
         .send({
-          email,
           displayName: `${label} Fan`,
           cityId: fanCityId,
           showOnMap,
@@ -205,6 +239,10 @@ describe('Artists (e2e)', () => {
         },
       });
       await prisma.fanProfile.deleteMany({ where: { userId: { in: userIds } } });
+      // Session referencia al User por FK: hay que borrarla antes que el User.
+      await prisma.session.deleteMany({
+        where: { id: { in: createdSessionIds } },
+      });
       await prisma.user.deleteMany({ where: { email: { in: createdUserEmails } } });
       await prisma.artist.deleteMany({
         where: { id: { in: [artistXId, artistYId, artistZId] } },
@@ -340,11 +378,23 @@ describe('Artists (e2e)', () => {
     let emptyArtistId: string;
 
     const createdUserEmails: string[] = [];
+    const createdSessionIds: string[] = [];
 
-    function uniqueEmail(label: string) {
+    async function authenticatedUser(label: string) {
       const email = `${label}-${randomUUID()}@example.com`;
       createdUserEmails.push(email);
-      return email;
+
+      const user = await authService.findOrCreateFromGoogle({
+        googleId: `google-${label}-${randomUUID()}`,
+        email,
+        name: label,
+        emailVerified: true,
+      });
+
+      const session = await sessionService.create(user.id);
+      createdSessionIds.push(session.id);
+
+      return signedCookieHeader(session.id);
     }
 
     async function createFan(
@@ -352,11 +402,11 @@ describe('Artists (e2e)', () => {
       artistIds: string[],
       fanCityId: string,
     ) {
-      const email = uniqueEmail(label);
+      const cookie = await authenticatedUser(label);
       const response = await request(app.getHttpServer())
         .post('/fan-profiles')
+        .set('Cookie', cookie)
         .send({
-          email,
           displayName: `${label} Fan`,
           cityId: fanCityId,
           showOnMap: true,
@@ -490,6 +540,10 @@ describe('Artists (e2e)', () => {
         },
       });
       await prisma.fanProfile.deleteMany({ where: { userId: { in: userIds } } });
+      // Session referencia al User por FK: hay que borrarla antes que el User.
+      await prisma.session.deleteMany({
+        where: { id: { in: createdSessionIds } },
+      });
       await prisma.user.deleteMany({ where: { email: { in: createdUserEmails } } });
 
       await prisma.setlistSong.deleteMany({
