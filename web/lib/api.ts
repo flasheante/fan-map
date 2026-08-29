@@ -104,11 +104,17 @@ export interface FanProfile {
 }
 
 export interface CreateFanProfileInput {
-  email: string;
   displayName: string;
   cityId: string;
   showOnMap?: boolean;
   artistIds?: string[];
+}
+
+// Shape devuelto por GET /auth/me (ver SessionService.PublicUser /
+// AuthController#me): solo id + email, nunca datos de OAuth.
+export interface CurrentUser {
+  id: string;
+  email: string;
 }
 
 export async function getArtists(): Promise<Artist[]> {
@@ -157,18 +163,93 @@ async function extractErrorMessage(res: Response): Promise<string | undefined> {
   return undefined;
 }
 
+// POST /fan-profiles requiere sesión (SessionAuthGuard): el User se
+// resuelve server-side de la cookie (request.user.id), nunca de un campo
+// del body — por eso CreateFanProfileInput no tiene email ni userId, y por
+// eso credentials: "include" es obligatorio acá (web y api son orígenes
+// distintos incluso en dev, ver CORS en api/src/main.ts). El body se arma
+// campo por campo (no `JSON.stringify(input)` directo) para que ni un
+// `email`/`userId` colado en el objeto de entrada llegue a viajar.
 export async function createFanProfile(
   input: CreateFanProfileInput,
 ): Promise<FanProfile> {
+  const body: CreateFanProfileInput = {
+    displayName: input.displayName,
+    cityId: input.cityId,
+    ...(input.showOnMap !== undefined ? { showOnMap: input.showOnMap } : {}),
+    ...(input.artistIds !== undefined ? { artistIds: input.artistIds } : {}),
+  };
+
   const res = await fetch(`${API_URL}/fan-profiles`, {
     method: "POST",
+    credentials: "include",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(input),
+    body: JSON.stringify(body),
   });
 
   if (!res.ok) {
     const message = await extractErrorMessage(res);
     throw new Error(message ?? `Failed to create fan profile: ${res.status}`);
+  }
+
+  return res.json();
+}
+
+// GET /auth/me: 200 = sesión válida (User), 401 = sin sesión (no es un
+// error, es el estado "no autenticado"), cualquier otro código es un
+// fallo real de la API y no se silencia.
+export async function getCurrentUser(): Promise<CurrentUser | null> {
+  const res = await fetch(`${API_URL}/auth/me`, {
+    credentials: "include",
+    cache: "no-store",
+  });
+
+  if (res.status === 401) return null;
+
+  if (!res.ok) {
+    throw new Error(`Failed to fetch current user: ${res.status}`);
+  }
+
+  return res.json();
+}
+
+// POST /auth/logout invalida la Session server-side. No toca la cookie
+// httpOnly desde JS (no se puede, y no hace falta: el backend la limpia
+// con Set-Cookie en la respuesta) — el frontend solo debe olvidar el user
+// del estado en memoria (ver AuthProvider).
+export async function logout(): Promise<void> {
+  const res = await fetch(`${API_URL}/auth/logout`, {
+    method: "POST",
+    credentials: "include",
+  });
+
+  if (!res.ok) {
+    throw new Error(`Failed to log out: ${res.status}`);
+  }
+}
+
+// URL de inicio del flujo de Google OAuth. Es una navegación de página
+// completa (<a href={googleLoginUrl()}>), no un fetch: el backend hace el
+// redirect a Google y de vuelta, y termina seteando la cookie de sesión.
+export function googleLoginUrl(): string {
+  return `${API_URL}/auth/google`;
+}
+
+// GET /fan-profiles/me: el FanProfile del User autenticado. 404 = tiene
+// sesión pero todavía no completó su perfil; 401 = no hay sesión (se trata
+// igual que "no hay perfil que mostrar" para este helper, ver AuthProvider
+// para el estado de autenticación en sí). Cualquier otro código es un
+// fallo real y no se silencia.
+export async function getMyFanProfile(): Promise<FanProfile | null> {
+  const res = await fetch(`${API_URL}/fan-profiles/me`, {
+    credentials: "include",
+    cache: "no-store",
+  });
+
+  if (res.status === 404 || res.status === 401) return null;
+
+  if (!res.ok) {
+    throw new Error(`Failed to fetch current fan profile: ${res.status}`);
   }
 
   return res.json();

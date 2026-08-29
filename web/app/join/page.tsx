@@ -1,5 +1,5 @@
 import { BackToTheWarningLink } from "@/components/artists/back-link";
-import { FanForm } from "@/components/join/fan-form";
+import { JoinFlow } from "@/components/join/join-flow";
 
 export default function JoinPage() {
   return (
@@ -12,7 +12,7 @@ export default function JoinPage() {
           favoritos.
         </p>
       </header>
-      <FanForm />
+      <JoinFlow />
     </main>
   );
 }

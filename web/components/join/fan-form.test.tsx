@@ -76,9 +76,6 @@ function fillValidForm() {
   fireEvent.change(screen.getByLabelText(/nombre/i), {
     target: { value: "Ana Fan" },
   });
-  fireEvent.change(screen.getByLabelText(/email/i), {
-    target: { value: "ana@example.com" },
-  });
 }
 
 beforeEach(() => {
@@ -100,7 +97,9 @@ describe("FanForm", () => {
 
     await screen.findByLabelText(/nombre/i);
 
-    expect(screen.getByLabelText(/email/i)).toBeInTheDocument();
+    // Etapa 3: ya no hay campo de email — el User se resuelve de la
+    // sesión, no de un input del formulario.
+    expect(screen.queryByLabelText(/email/i)).not.toBeInTheDocument();
     expect(screen.getByLabelText(/país/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/ciudad/i)).toBeInTheDocument();
     expect(
@@ -227,31 +226,10 @@ describe("FanForm", () => {
   it("validates displayName is required", async () => {
     await renderReadyForm();
     await selectCountryAndCity();
-    fireEvent.change(screen.getByLabelText(/email/i), {
-      target: { value: "ana@example.com" },
-    });
 
     fireEvent.click(screen.getByRole("button", { name: /crear perfil/i }));
 
     expect(await screen.findByText(/ingresá tu nombre/i)).toBeInTheDocument();
-    expect(createFanProfile).not.toHaveBeenCalled();
-  });
-
-  it("validates email format", async () => {
-    await renderReadyForm();
-    await selectCountryAndCity();
-    fireEvent.change(screen.getByLabelText(/nombre/i), {
-      target: { value: "Ana Fan" },
-    });
-    fireEvent.change(screen.getByLabelText(/email/i), {
-      target: { value: "not-an-email" },
-    });
-
-    fireEvent.click(screen.getByRole("button", { name: /crear perfil/i }));
-
-    expect(
-      await screen.findByText(/ingresá un email válido/i),
-    ).toBeInTheDocument();
     expect(createFanProfile).not.toHaveBeenCalled();
   });
 
@@ -312,13 +290,17 @@ describe("FanForm", () => {
 
     await waitFor(() =>
       expect(createFanProfile).toHaveBeenCalledWith({
-        email: "ana@example.com",
         displayName: "Ana Fan",
         cityId: monterrey.id,
         showOnMap: true,
         artistIds: [theWarning.id],
       }),
     );
+    // El User se resuelve de la sesión (SessionAuthGuard), nunca de un
+    // campo enviado por el cliente.
+    const [payload] = createFanProfile.mock.calls[0] as [Record<string, unknown>];
+    expect(payload).not.toHaveProperty("email");
+    expect(payload).not.toHaveProperty("userId");
   });
 
   it("shows a loading state while the POST is in flight", async () => {
@@ -349,7 +331,7 @@ describe("FanForm", () => {
 
   it("shows a friendly error when the POST fails", async () => {
     createFanProfile.mockRejectedValue(
-      new Error("Email ana@example.com is already in use"),
+      new Error("User already has a fan profile"),
     );
 
     await renderReadyForm();
@@ -361,7 +343,7 @@ describe("FanForm", () => {
     expect(
       await screen.findByText(/no pudimos crear tu perfil/i),
     ).toBeInTheDocument();
-    expect(screen.getByText(/already in use/i)).toBeInTheDocument();
+    expect(screen.getByText(/already has a fan profile/i)).toBeInTheDocument();
   });
 
   it("shows a success confirmation after a successful POST, without exposing any userId", async () => {

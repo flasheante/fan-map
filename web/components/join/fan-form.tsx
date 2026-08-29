@@ -13,15 +13,12 @@ import {
 } from "@/lib/api";
 import { findArtistBySlug, THE_WARNING_SLUG } from "@/lib/the-warning-fan-map";
 
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
 type LoadStatus = "loading" | "error" | "ready";
 type CitiesStatus = "idle" | "loading" | "loaded" | "error";
 type SubmitStatus = "idle" | "submitting" | "error" | "success";
 
 interface FormErrors {
   displayName?: string;
-  email?: string;
   country?: string;
   city?: string;
   artists?: string;
@@ -38,7 +35,6 @@ export function FanForm() {
   const [cityId, setCityId] = useState("");
 
   const [displayName, setDisplayName] = useState("");
-  const [email, setEmail] = useState("");
   const [selectedArtistIds, setSelectedArtistIds] = useState<string[]>([]);
   const [showOnMap, setShowOnMap] = useState(true);
 
@@ -112,11 +108,6 @@ export function FanForm() {
     if (!displayName.trim()) {
       nextErrors.displayName = "Ingresá tu nombre.";
     }
-    if (!email.trim()) {
-      nextErrors.email = "Ingresá tu email.";
-    } else if (!EMAIL_PATTERN.test(email.trim())) {
-      nextErrors.email = "Ingresá un email válido.";
-    }
     if (!countryId) {
       nextErrors.country = "Elegí tu país.";
     }
@@ -141,7 +132,6 @@ export function FanForm() {
 
     try {
       await createFanProfile({
-        email: email.trim(),
         displayName: displayName.trim(),
         cityId,
         showOnMap,
@@ -204,24 +194,6 @@ export function FanForm() {
         {errors.displayName && (
           <p role="alert" className={errorClass}>
             {errors.displayName}
-          </p>
-        )}
-      </div>
-
-      <div className="flex flex-col gap-1">
-        <label htmlFor="email" className={labelClass}>
-          Email
-        </label>
-        <input
-          id="email"
-          type="email"
-          className={inputClass}
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-        />
-        {errors.email && (
-          <p role="alert" className={errorClass}>
-            {errors.email}
           </p>
         )}
       </div>
