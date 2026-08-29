@@ -7,6 +7,7 @@ import { FanProfilesModule } from './fan-profiles/fan-profiles.module';
 import { ArtistsModule } from './artists/artists.module';
 import { ShowsModule } from './shows/shows.module';
 import { DemoSeedModule } from './demo-seed/demo-seed.module';
+import { AuthModule } from './auth/auth.module';
 
 @Module({
   imports: [
@@ -16,6 +17,7 @@ import { DemoSeedModule } from './demo-seed/demo-seed.module';
     ArtistsModule,
     ShowsModule,
     DemoSeedModule,
+    AuthModule,
   ],
   controllers: [AppController],
   providers: [AppService],

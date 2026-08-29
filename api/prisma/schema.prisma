@@ -12,10 +12,10 @@ datasource db {
 }
 
 // Represents the system identity of a person using FanMap.
-// Auth (login, password, OAuth, sessions) is not implemented yet.
-// Today the only way a User is created is as a side effect of
-// POST /fan-profiles (see FanProfilesService), which will be adapted
-// to read the User from the authenticated request context once Auth exists.
+// Auth (Google OAuth + server-side session, see src/auth) creates/finds
+// this row by email. POST /fan-profiles still also creates one as a side
+// effect (see FanProfilesService) — that will be adapted to read the User
+// from the authenticated request context in a later stage.
 model User {
   id        String   @id @default(uuid())
   email     String   @unique
@@ -23,8 +23,29 @@ model User {
   updatedAt DateTime @updatedAt
 
   fanProfile FanProfile?
+  sessions   Session[]
 
   @@map("users")
+}
+
+// Server-side session created after a successful Google OAuth login (see
+// AuthController#googleCallback). `id` doubles as the opaque session token
+// stored in the client's signed, httpOnly cookie (SESSION_COOKIE_NAME) —
+// its default uuid() already has enough entropy to serve as an unguessable
+// token, so no separate `token` field is needed. Deliberately minimal per
+// the current auth stage: no device/IP metadata, since nothing reads it
+// yet ("no agregar campos por las dudas").
+model Session {
+  id        String   @id @default(uuid())
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("sessions")
 }
 
 // Minimal geographic catalog. Seeded manually for now (see prisma/seed.ts) —

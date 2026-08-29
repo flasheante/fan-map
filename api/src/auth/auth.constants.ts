@@ -1,0 +1,38 @@
+// Nombre de la cookie httpOnly que guarda el id de sesión (ver
+// SessionService) — el valor de la cookie ES el Session.id, no un JWT.
+export const SESSION_COOKIE_NAME = 'fanmap_session';
+
+// Cookie corta usada solo durante el roundtrip OAuth (GET /auth/google →
+// Google → GET /auth/google/callback) para validar el parámetro `state`
+// anti-CSRF. No tiene relación con la sesión de la app: se borra en el
+// callback se cumpla o no la validación.
+export const OAUTH_STATE_COOKIE_NAME = 'fanmap_oauth_state';
+export const OAUTH_STATE_MAX_AGE_MS = 5 * 60 * 1000; // 5 minutos alcanzan de sobra para el redirect a Google y de vuelta.
+
+// 7 días. Ver SESSION_MAX_AGE en .env.example.
+export const DEFAULT_SESSION_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+
+// Convierte SESSION_MAX_AGE (ms, string) a un número usable por
+// SessionService. Mismo patrón que resolveRequestsPerSecond en
+// setlist-fm.module.ts: nunca lanza por una env var mal configurada, cae al
+// default ante undefined/no-numérico/cero/negativo.
+export function resolveSessionMaxAgeMs(raw: string | undefined): number {
+  if (raw === undefined) return DEFAULT_SESSION_MAX_AGE_MS;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) && parsed > 0
+    ? parsed
+    : DEFAULT_SESSION_MAX_AGE_MS;
+}
+
+// Decide el flag `secure` de las cookies de auth. SESSION_SECURE, si está
+// seteada explícitamente ("true"/"false"), siempre gana; si no está
+// seteada, se infiere de NODE_ENV (secure por defecto en producción, no
+// secure en desarrollo/test — donde normalmente no hay HTTPS local).
+export function resolveSecureCookie(
+  sessionSecure: string | undefined,
+  nodeEnv: string | undefined,
+): boolean {
+  if (sessionSecure === 'true') return true;
+  if (sessionSecure === 'false') return false;
+  return nodeEnv === 'production';
+}
