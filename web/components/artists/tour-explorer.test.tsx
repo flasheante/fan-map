@@ -193,12 +193,21 @@ describe("TourExplorer", () => {
   });
 
   it("replaces to the bare pathname (no trailing '?') when the last filter is cleared", () => {
-    const { replace } = setup("search=monterrey");
-    render(<TourExplorer artist={artist} shows={twoCityShows} />);
+    // El campo de búsqueda debouncea antes de propagar a la URL (ver
+    // tour-filters.tsx), así que hay que avanzar los timers para que el
+    // router.replace llegue a dispararse.
+    vi.useFakeTimers();
+    try {
+      const { replace } = setup("search=monterrey");
+      render(<TourExplorer artist={artist} shows={twoCityShows} />);
 
-    fireEvent.change(screen.getByLabelText(/buscar/i), { target: { value: "" } });
+      fireEvent.change(screen.getByLabelText(/buscar/i), { target: { value: "" } });
+      vi.runAllTimers();
 
-    expect(replace).toHaveBeenCalledWith(PATHNAME, { scroll: false });
+      expect(replace).toHaveBeenCalledWith(PATHNAME, { scroll: false });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("updates its output when the search params change externally (back/forward navigation)", () => {

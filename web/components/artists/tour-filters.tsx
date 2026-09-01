@@ -1,8 +1,12 @@
 "use client";
 
-import type { ChangeEvent } from "react";
+import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import type { Country } from "@/lib/api";
 import type { TourCityOption, TourFilters } from "@/lib/tour-filters";
+
+// Cuánto esperar sin tipeo antes de propagar la búsqueda a la URL (ver
+// handleSearchChange más abajo).
+const SEARCH_DEBOUNCE_MS = 300;
 
 interface TourFiltersPanelProps {
   filters: TourFilters;
@@ -52,8 +56,39 @@ export function TourFiltersPanel({
     onChange({ ...filters, ...partial });
   }
 
+  // El campo de búsqueda tiene su propio estado local en vez de leer
+  // `filters.search` directo (como hacen año/país/ciudad/fechas): cada
+  // `update()` dispara un router.replace en tour-explorer.tsx, y esa
+  // navegación es asincrónica. Si el input quedara controlado 1:1 por
+  // `filters.search`, tipear rápido dispara una navegación por tecla y,
+  // en cuanto una de esas resuelve con un valor más viejo que lo que el
+  // usuario ya tipeó, React pisa el input con ese valor desactualizado —
+  // se "comen" letras (ver bug reportado: "tipeo y no funciona"). Acá el
+  // input siempre refleja lo que se tipeó al instante, y sólo se
+  // propaga a la URL con debounce.
+  const [searchValue, setSearchValue] = useState(filters.search ?? "");
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Resincroniza cuando `filters.search` cambia por afuera del debounce
+  // propio: "Limpiar filtros", back/forward, u otro filtro que también
+  // pasa por handleFiltersChange.
+  useEffect(() => {
+    setSearchValue(filters.search ?? "");
+  }, [filters.search]);
+
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, []);
+
   function handleSearchChange(event: ChangeEvent<HTMLInputElement>) {
-    update({ search: event.target.value === "" ? undefined : event.target.value });
+    const value = event.target.value;
+    setSearchValue(value);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      update({ search: value === "" ? undefined : value });
+    }, SEARCH_DEBOUNCE_MS);
   }
 
   function handleYearChange(event: ChangeEvent<HTMLSelectElement>) {
@@ -89,7 +124,7 @@ export function TourFiltersPanel({
           Buscar
           <input
             type="search"
-            value={filters.search ?? ""}
+            value={searchValue}
             onChange={handleSearchChange}
             placeholder="Ciudad, país, venue o año"
             className={inputClassName}

@@ -105,12 +105,51 @@ describe("TourFiltersPanel", () => {
     expect(options[1]).toHaveTextContent(/santiago.*méxico/i);
   });
 
-  it("calls onChange with the typed search, merged with the existing filters", () => {
-    const { onChange } = renderPanel({ filters: { year: 2024 } });
+  it("shows what was typed immediately, without waiting for the debounce", () => {
+    renderPanel({ filters: { year: 2024 } });
 
     fireEvent.change(screen.getByLabelText(/buscar/i), { target: { value: "m" } });
 
-    expect(onChange).toHaveBeenLastCalledWith({ year: 2024, search: "m" });
+    expect(screen.getByLabelText(/buscar/i)).toHaveValue("m");
+  });
+
+  // El campo de búsqueda debouncea antes de llamar a onChange (ver
+  // tour-filters.tsx): cada onChange dispara un router.replace real en
+  // tour-explorer.tsx, y sin debounce tipear rápido pierde letras (una
+  // navegación vieja resuelve después de una más nueva y pisa el input).
+  it("calls onChange with the typed search, merged with the existing filters, after the debounce settles", () => {
+    vi.useFakeTimers();
+    try {
+      const { onChange } = renderPanel({ filters: { year: 2024 } });
+
+      fireEvent.change(screen.getByLabelText(/buscar/i), { target: { value: "m" } });
+      expect(onChange).not.toHaveBeenCalled();
+
+      vi.runAllTimers();
+
+      expect(onChange).toHaveBeenLastCalledWith({ year: 2024, search: "m" });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("only propagates the final value when several keystrokes happen within the debounce window", () => {
+    vi.useFakeTimers();
+    try {
+      const { onChange } = renderPanel();
+      const search = screen.getByLabelText(/buscar/i);
+
+      fireEvent.change(search, { target: { value: "m" } });
+      fireEvent.change(search, { target: { value: "mo" } });
+      fireEvent.change(search, { target: { value: "mon" } });
+
+      vi.runAllTimers();
+
+      expect(onChange).toHaveBeenCalledTimes(1);
+      expect(onChange).toHaveBeenLastCalledWith({ search: "mon" });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("calls onChange with a numeric year when a year is selected", () => {

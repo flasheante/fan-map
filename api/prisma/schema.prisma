@@ -1,8 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Get a free hosted Postgres database in seconds: `npx create-db`
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -11,63 +6,44 @@ datasource db {
   provider = "postgresql"
 }
 
-// Represents the system identity of a person using FanMap.
-// Auth (Google OAuth + server-side session, see src/auth) creates/finds
-// this row by email. POST /fan-profiles still also creates one as a side
-// effect (see FanProfilesService) — that will be adapted to read the User
-// from the authenticated request context in a later stage.
 model User {
-  id        String   @id @default(uuid())
-  email     String   @unique
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
+  id         String      @id @default(uuid())
+  email      String      @unique
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
   fanProfile FanProfile?
   sessions   Session[]
 
   @@map("users")
 }
 
-// Server-side session created after a successful Google OAuth login (see
-// AuthController#googleCallback). `id` doubles as the opaque session token
-// stored in the client's signed, httpOnly cookie (SESSION_COOKIE_NAME) —
-// its default uuid() already has enough entropy to serve as an unguessable
-// token, so no separate `token` field is needed. Deliberately minimal per
-// the current auth stage: no device/IP metadata, since nothing reads it
-// yet ("no agregar campos por las dudas").
 model Session {
   id        String   @id @default(uuid())
   userId    String
   expiresAt DateTime
   createdAt DateTime @default(now())
-
-  user User @relation(fields: [userId], references: [id])
+  user      User     @relation(fields: [userId], references: [id])
 
   @@index([userId])
   @@index([expiresAt])
   @@map("sessions")
 }
 
-// Minimal geographic catalog. Seeded manually for now (see prisma/seed.ts) —
-// not exposed for writes by end users. Not artist-specific: this catalog is
-// shared by every artist community FanMap supports.
 model Country {
-  id   String @id @default(uuid())
-  name String
-  code String @unique // ISO 3166-1 alpha-2
-
+  id     String @id @default(uuid())
+  name   String
+  code   String @unique
   cities City[]
 
   @@map("countries")
 }
 
 model City {
-  id        String  @id @default(uuid())
-  name      String
-  countryId String
-  latitude  Float?
-  longitude Float?
-
+  id          String       @id @default(uuid())
+  name        String
+  countryId   String
+  latitude    Float?
+  longitude   Float?
   country     Country      @relation(fields: [countryId], references: [id])
   fanProfiles FanProfile[]
   shows       Show[]
@@ -77,115 +53,83 @@ model City {
   @@map("cities")
 }
 
-// A music artist a FanMap community can be built around. Today the system
-// only has one seeded artist (The Warning, see prisma/seed.ts), but a
-// FanProfile can follow any number of artists via FanArtist — the domain is
-// not hardcoded to a single artist.
 model Artist {
-  id        String   @id @default(uuid())
+  id        String      @id @default(uuid())
   name      String
-  slug      String   @unique
+  slug      String      @unique
   imageUrl  String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  fans  FanArtist[]
-  shows Show[]
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+  fans      FanArtist[]
+  shows     Show[]
 
   @@map("artists")
 }
 
-// A user's public-facing fan data: display name, location, whether they opt
-// in to appear on the fan map, and which artists they follow (see FanArtist).
 model FanProfile {
-  id          String   @id @default(uuid())
-  userId      String   @unique
+  id          String      @id @default(uuid())
+  userId      String      @unique
   cityId      String
   displayName String
-  showOnMap   Boolean  @default(false)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  user    User        @relation(fields: [userId], references: [id])
-  city    City        @relation(fields: [cityId], references: [id])
-  artists FanArtist[]
+  showOnMap   Boolean     @default(false)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  artists     FanArtist[]
+  city        City        @relation(fields: [cityId], references: [id])
+  user        User        @relation(fields: [userId], references: [id])
 
   @@index([showOnMap])
   @@index([cityId])
   @@map("fan_profiles")
 }
 
-// Join entity for the FanProfile <-> Artist N:N relation (a fan follows N
-// artists, an artist has N fans). Modeled explicitly (not an implicit m2n)
-// so it can carry its own metadata, e.g. createdAt for "followed since".
 model FanArtist {
   fanProfileId String
   artistId     String
-  createdAt    DateTime @default(now())
-
-  fanProfile FanProfile @relation(fields: [fanProfileId], references: [id])
-  artist     Artist     @relation(fields: [artistId], references: [id])
+  createdAt    DateTime   @default(now())
+  artist       Artist     @relation(fields: [artistId], references: [id])
+  fanProfile   FanProfile @relation(fields: [fanProfileId], references: [id])
 
   @@id([fanProfileId, artistId])
   @@index([artistId])
   @@map("fan_artists")
 }
 
-// A concert performance by an Artist in a City. Not artist-specific (any
-// Artist can have Shows); today only The Warning has seeded/entered data.
-// Setlist is optional: a Show can exist before its setlist is known.
-//
-// externalId links a Show to the setlist.fm entry it was synced from (see
-// SetlistFmSyncService). setlist.fm's setlist `id` is globally unique across
-// their whole database (it identifies one concert event, stable across
-// edits — see https://api.setlist.fm/docs/1.0/json_Setlist.html), not just
-// unique per artist, so a plain @unique is correct here rather than a
-// composite key. Nullable because manually-entered Shows have no external
-// source.
 model Show {
   id         String   @id @default(uuid())
   artistId   String
   cityId     String
   date       DateTime
   venue      String?
-  externalId String?  @unique
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
-
-  artist  Artist   @relation(fields: [artistId], references: [id])
-  city    City     @relation(fields: [cityId], references: [id])
-  setlist Setlist?
+  externalId String?  @unique
+  setlist    Setlist?
+  artist     Artist   @relation(fields: [artistId], references: [id])
+  city       City     @relation(fields: [cityId], references: [id])
 
   @@index([artistId])
   @@index([cityId])
   @@map("shows")
 }
 
-// The setlist for a Show — 1:1. Created once the setlist is known, not
-// necessarily together with the Show.
 model Setlist {
-  id        String   @id @default(uuid())
-  showId    String   @unique
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  show  Show          @relation(fields: [showId], references: [id])
-  songs SetlistSong[]
+  id        String        @id @default(uuid())
+  showId    String        @unique
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+  songs     SetlistSong[]
+  show      Show          @relation(fields: [showId], references: [id])
 
   @@map("setlists")
 }
 
-// A song played within a Setlist, in performance order (position, 1-based —
-// enforced by a DB check constraint added in the migration SQL, since this
-// Prisma version has no @@check attribute). Title is free text: no Song
-// catalog yet, since there is no write API for shows/setlists in this slice.
 model SetlistSong {
-  id        String @id @default(uuid())
+  id        String  @id @default(uuid())
   setlistId String
   title     String
   position  Int
-
-  setlist Setlist @relation(fields: [setlistId], references: [id])
+  setlist   Setlist @relation(fields: [setlistId], references: [id])
 
   @@unique([setlistId, position])
   @@index([setlistId])
