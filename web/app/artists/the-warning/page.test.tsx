@@ -47,15 +47,16 @@ vi.mock("@/lib/api", async (importOriginal) => {
   return { ...actual, getArtists };
 });
 
-vi.mock("@/components/map/fan-map-loader", () => ({
-  FanMapLoader: ({ fans }: { fans: ArtistFan[] }) => (
-    <div data-testid="fan-map-loader">{fans.length} fans on map</div>
-  ),
-}));
-
-vi.mock("@/components/artists/shows-list", () => ({
-  ShowsList: ({ shows }: { shows: ArtistShow[] }) => (
-    <div data-testid="shows-list">{shows.length} shows</div>
+// Etapa G: el cuerpo del mapa ya no es FanMapLoader ni un <ShowsList>
+// aparte — es TourExplorer (el mismo que /artists/the-warning/tour y la
+// vista "tour" de /map), así que se mockea igual que en esos otros tests
+// (tour-explorer.test.tsx, app/map/page.test.tsx) para aislar esta página
+// de su implementación interna.
+vi.mock("@/components/artists/tour-explorer", () => ({
+  TourExplorer: ({ artist, shows }: { artist: Artist; shows: ArtistShow[] }) => (
+    <div data-testid="tour-explorer">
+      {artist.name} / {shows.length} shows
+    </div>
   ),
 }));
 
@@ -260,8 +261,7 @@ describe("TheWarningArtistPage", () => {
     expect(
       screen.getByText(/no pudimos cargar la página del artista/i),
     ).toBeInTheDocument();
-    expect(screen.queryByTestId("fan-map-loader")).not.toBeInTheDocument();
-    expect(screen.queryByTestId("shows-list")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("tour-explorer")).not.toBeInTheDocument();
     expect(screen.queryByTestId("artist-stats-summary")).not.toBeInTheDocument();
     expect(screen.queryByTestId("top-songs")).not.toBeInTheDocument();
   });
@@ -275,8 +275,7 @@ describe("TheWarningArtistPage", () => {
     expect(
       screen.getByText(/no pudimos cargar la página del artista/i),
     ).toBeInTheDocument();
-    expect(screen.queryByTestId("fan-map-loader")).not.toBeInTheDocument();
-    expect(screen.queryByTestId("shows-list")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("tour-explorer")).not.toBeInTheDocument();
     expect(screen.queryByTestId("artist-stats-summary")).not.toBeInTheDocument();
     expect(screen.queryByTestId("top-songs")).not.toBeInTheDocument();
   });
@@ -291,8 +290,7 @@ describe("TheWarningArtistPage", () => {
     expect(
       screen.getByText(/no pudimos cargar la página del artista/i),
     ).toBeInTheDocument();
-    expect(screen.queryByTestId("fan-map-loader")).not.toBeInTheDocument();
-    expect(screen.queryByTestId("shows-list")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("tour-explorer")).not.toBeInTheDocument();
     expect(screen.queryByTestId("artist-stats-summary")).not.toBeInTheDocument();
     expect(screen.queryByTestId("top-songs")).not.toBeInTheDocument();
   });
@@ -308,8 +306,7 @@ describe("TheWarningArtistPage", () => {
     expect(
       screen.getByText(/no pudimos cargar la página del artista/i),
     ).toBeInTheDocument();
-    expect(screen.queryByTestId("fan-map-loader")).not.toBeInTheDocument();
-    expect(screen.queryByTestId("shows-list")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("tour-explorer")).not.toBeInTheDocument();
     expect(screen.queryByTestId("artist-stats-summary")).not.toBeInTheDocument();
     expect(screen.queryByTestId("top-songs")).not.toBeInTheDocument();
   });
@@ -323,8 +320,7 @@ describe("TheWarningArtistPage", () => {
     );
 
     expect(screen.getByText(/no se encontró el artista/i)).toBeInTheDocument();
-    expect(screen.queryByTestId("fan-map-loader")).not.toBeInTheDocument();
-    expect(screen.queryByTestId("shows-list")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("tour-explorer")).not.toBeInTheDocument();
     expect(screen.queryByTestId("artist-stats-summary")).not.toBeInTheDocument();
     expect(screen.queryByTestId("top-songs")).not.toBeInTheDocument();
   });
@@ -371,23 +367,23 @@ describe("TheWarningArtistPage", () => {
     expect(screen.getByText(/2 fans en el mapa/i)).toBeInTheDocument();
   });
 
-  it("shows the fan map with the loaded fans", async () => {
-    const fans = [makeFan("fan-1")];
-    await renderPage({ status: "ok", artist: makeArtist(), fans });
-
-    expect(screen.getByTestId("fan-map-loader")).toHaveTextContent(
-      "1 fans on map",
-    );
-  });
-
-  it("shows the shows list with the loaded shows", async () => {
+  it("shows the tour explorer (Historial) as the default map, with the loaded shows", async () => {
     const shows = [makeShow("show-1"), makeShow("show-2")];
     await renderPage(
       { status: "ok", artist: makeArtist(), fans: [] },
-      { status: "ok", artist: makeArtist(), shows },
+      { status: "ok", artist: makeArtist({ name: "The Warning" }), shows },
     );
 
-    expect(screen.getByTestId("shows-list")).toHaveTextContent("2 shows");
+    expect(screen.getByTestId("tour-explorer")).toHaveTextContent(
+      "The Warning / 2 shows",
+    );
+  });
+
+  it("does not render the Fan Map as the primary view", async () => {
+    const fans = [makeFan("fan-1")];
+    await renderPage({ status: "ok", artist: makeArtist(), fans });
+
+    expect(screen.queryByTestId("fan-map-loader")).not.toBeInTheDocument();
   });
 
   it("shows the artist stats summary with the loaded stats", async () => {
@@ -450,7 +446,7 @@ describe("TheWarningArtistPage", () => {
     expect(
       screen.getByText(/todavía no hay fans.*the warning.*mapa/i),
     ).toBeInTheDocument();
-    expect(screen.getByTestId("fan-map-loader")).toBeInTheDocument();
+    expect(screen.getByTestId("tour-explorer")).toBeInTheDocument();
   });
 
   it("renders a working CTA linking to /join", async () => {
