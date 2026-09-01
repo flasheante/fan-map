@@ -103,7 +103,10 @@ describe("JoinFlow", () => {
 
     await waitFor(() => expect(screen.queryByText(/cargando/i)).not.toBeInTheDocument());
     expect(screen.queryByTestId("fan-form")).not.toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /mapa/i })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /mapa/i })).toHaveAttribute(
+      "href",
+      "/map?view=fans",
+    );
   });
 
   it("shows an error message when checking the fan profile fails", async () => {

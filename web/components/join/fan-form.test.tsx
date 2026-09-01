@@ -367,7 +367,7 @@ describe("FanForm", () => {
       await screen.findByText(/tu perfil se creó correctamente/i),
     ).toBeInTheDocument();
     const mapLink = screen.getByRole("link", { name: /ver el mapa/i });
-    expect(mapLink).toHaveAttribute("href", "/map");
+    expect(mapLink).toHaveAttribute("href", "/map?view=fans");
     expect(screen.queryByText(/userId/i)).not.toBeInTheDocument();
     expect(screen.queryByText("profile-1")).not.toBeInTheDocument();
   });

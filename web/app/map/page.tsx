@@ -1,11 +1,23 @@
 import { BackToTheWarningLink } from "@/components/artists/back-link";
-import { FanMapLoader } from "@/components/map/fan-map-loader";
+import { MapExplorer } from "@/components/map/map-explorer";
+import { getArtists } from "@/lib/api";
 import { getTheWarningMapData } from "@/lib/the-warning-fan-map";
+import { getTheWarningTourMapData } from "@/lib/the-warning-tour-map";
 
+// Entrada principal al mapa: resuelve GET /artists una sola vez acá y lo
+// comparte con getTheWarningTourMapData y getTheWarningMapData (mismo
+// resolutor por slug que usan /artists/the-warning y
+// /artists/the-warning/tour, sin hardcodear el UUID del artista), así un
+// único GET /artists alcanza para ambos datasets aunque el usuario sólo vea
+// una vista a la vez. Todo lo que depende de la vista activa (Historial vs
+// Fan Map, ver lib/map-view.ts) vive en MapExplorer (Client Component): este
+// Server Component no sabe nada de `view`, sólo resuelve los datos una vez y
+// se los pasa.
 export default async function MapPage() {
-  const data = await getTheWarningMapData();
-
-  if (data.status === "error") {
+  let artists;
+  try {
+    artists = await getArtists();
+  } catch {
     return (
       <main className="flex h-screen w-full flex-col items-center justify-center gap-4">
         <p>No se pudo cargar el mapa. Intentá de nuevo más tarde.</p>
@@ -14,7 +26,21 @@ export default async function MapPage() {
     );
   }
 
-  if (data.status === "artist-not-found") {
+  const [tourData, fanData] = await Promise.all([
+    getTheWarningTourMapData(artists),
+    getTheWarningMapData(artists),
+  ]);
+
+  if (tourData.status === "error" || fanData.status === "error") {
+    return (
+      <main className="flex h-screen w-full flex-col items-center justify-center gap-4">
+        <p>No se pudo cargar el mapa. Intentá de nuevo más tarde.</p>
+        <BackToTheWarningLink />
+      </main>
+    );
+  }
+
+  if (tourData.status === "artist-not-found" || fanData.status === "artist-not-found") {
     return (
       <main className="flex h-screen w-full flex-col items-center justify-center gap-4">
         <p>No se encontró el artista The Warning.</p>
@@ -23,22 +49,12 @@ export default async function MapPage() {
     );
   }
 
-  const { artist, fans } = data;
+  const { artist, shows } = tourData;
+  const { fans } = fanData;
 
   return (
-    <main className="flex h-screen w-full flex-col">
-      <div className="border-b px-4 py-2">
-        <BackToTheWarningLink />
-      </div>
-      <header className="flex flex-wrap items-center justify-between gap-4 border-b px-4 py-3">
-        <h1 className="text-lg font-semibold">{artist.name} Fan Map</h1>
-        <p className="text-sm text-zinc-600 dark:text-zinc-400">
-          {fans.length} {fans.length === 1 ? "fan" : "fans"} en el mapa
-        </p>
-      </header>
-      <div className="min-h-0 flex-1">
-        <FanMapLoader fans={fans} />
-      </div>
+    <main className="flex h-screen w-full flex-col overflow-y-auto">
+      <MapExplorer artist={artist} shows={shows} fans={fans} />
     </main>
   );
 }
