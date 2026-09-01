@@ -1,9 +1,8 @@
 import Link from "next/link";
 import { ArtistStatsSummary } from "@/components/artists/artist-stats";
-import { ShowsList } from "@/components/artists/shows-list";
 import { TheWarningLogo } from "@/components/artists/the-warning-logo";
 import { TopSongs } from "@/components/artists/top-songs";
-import { FanMapLoader } from "@/components/map/fan-map-loader";
+import { TourExplorer } from "@/components/artists/tour-explorer";
 import { getArtists } from "@/lib/api";
 import { getTheWarningMapData } from "@/lib/the-warning-fan-map";
 import { getTheWarningShowsData } from "@/lib/the-warning-shows";
@@ -19,6 +18,12 @@ import { getTheWarningTopSongsData } from "@/lib/the-warning-top-songs";
 // /artists/:artistId/stats/songs corren en paralelo. Vive en una ruta
 // estática por ahora (sin [slug] genérico) hasta que haya más de un artista
 // que la necesite.
+//
+// Etapa G: el mapa que se ve por defecto acá es el Historial de shows
+// (TourExplorer, el mismo componente que /artists/the-warning/tour y la
+// vista "tour" de /map — nunca una segunda implementación) en vez del Fan
+// Map. `mapData`/`fans` se conservan sólo para el contador y el banner de
+// "sumate" del header, que no dependen de qué mapa se muestra.
 export default async function TheWarningArtistPage() {
   let artists;
   try {
@@ -76,7 +81,7 @@ export default async function TheWarningArtistPage() {
   const { topSongs } = topSongsData;
 
   return (
-    <main className="flex h-screen w-full flex-col">
+    <main className="flex h-screen w-full flex-col overflow-y-auto">
       <header className="flex flex-wrap items-center justify-between gap-4 border-b border-zinc-800 px-4 py-3">
         <div className="flex items-center gap-3">
           {artist.imageUrl && (
@@ -112,21 +117,13 @@ export default async function TheWarningArtistPage() {
         </div>
       </header>
       <ArtistStatsSummary stats={stats} />
-      <div className="min-h-0 flex-1">
-        <FanMapLoader fans={fans} />
-      </div>
+      <TourExplorer artist={artist} shows={shows} />
       {fans.length === 0 && (
         <p className="border-t border-zinc-800 px-4 py-3 text-center text-sm text-zinc-400">
           Todavía no hay fans de {artist.name} en el mapa. ¡Sumate y sé el
           primero!
         </p>
       )}
-      <section className="max-h-64 overflow-y-auto border-t border-zinc-800">
-        <h2 className="font-warning px-4 pt-3 text-sm font-bold uppercase tracking-wide text-zinc-400">
-          Shows
-        </h2>
-        <ShowsList shows={shows} />
-      </section>
       <div className="max-h-64 overflow-y-auto border-t border-zinc-800">
         <TopSongs topSongs={topSongs} />
       </div>

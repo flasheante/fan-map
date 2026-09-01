@@ -165,7 +165,7 @@ export function FanForm() {
         <p className="text-zinc-600 dark:text-zinc-400">
           Tu perfil se creó correctamente.
         </p>
-        <Link href="/map" className="font-medium underline underline-offset-2">
+        <Link href="/map?view=fans" className="font-medium underline underline-offset-2">
           Ver el mapa
         </Link>
       </div>
