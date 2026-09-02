@@ -77,6 +77,30 @@ describe('AuthController', () => {
         'https://accounts.google.com/o/oauth2/v2/auth?state=abc',
       );
     });
+
+    // Bug reportado: en producción, web (Vercel) y api (desplegada aparte)
+    // son dominios distintos → sitios distintos para el browser. Con
+    // SameSite=Lax, un fetch(credentials:"include") cross-site desde web
+    // nunca manda la cookie de vuelta (Lax sólo viaja en navegaciones de
+    // documento completas), así que GET /auth/me siempre da 401 después
+    // del login y el usuario nunca "avanza" más allá de "Continuar con
+    // Google" — ver auth.constants.ts. SameSite=None (que exige Secure,
+    // ya true acá) es lo que corrige eso.
+    it("uses SameSite=None when cookies are secure (cross-site prod deploy)", () => {
+      googleOAuth.getAuthUrl.mockReturnValue("https://accounts.google.com/o/oauth2/v2/auth?state=abc");
+      const secureController = new AuthController(
+        googleOAuth as unknown as GoogleOAuthClient,
+        authService as unknown as AuthService,
+        sessions as unknown as SessionService,
+        { ...config, secureCookies: true },
+      );
+      const res = makeResponse();
+
+      secureController.googleLogin(res);
+
+      const [, , options] = res.cookie.mock.calls[0];
+      expect(options).toMatchObject({ secure: true, sameSite: "none" });
+    });
   });
 
   describe('GET /auth/google/callback', () => {
@@ -111,6 +135,31 @@ describe('AuthController', () => {
         }),
       );
       expect(res.redirect).toHaveBeenCalledWith(config.webAppUrl);
+    });
+
+    // Mismo caso que en GET /auth/google, pero para la cookie de sesión
+    // real: es la que después hace o no hace que GET /auth/me,
+    // GET /fan-profiles/me y POST /fan-profiles vean al usuario logueado.
+    it("uses SameSite=None when cookies are secure (cross-site prod deploy)", async () => {
+      googleOAuth.getIdentity.mockResolvedValue(identity);
+      authService.findOrCreateFromGoogle.mockResolvedValue(user);
+      sessions.create.mockResolvedValue(session);
+      const secureController = new AuthController(
+        googleOAuth as unknown as GoogleOAuthClient,
+        authService as unknown as AuthService,
+        sessions as unknown as SessionService,
+        { ...config, secureCookies: true },
+      );
+      const req = makeRequest("matching-state");
+      const res = makeResponse();
+
+      await secureController.googleCallback("auth-code", "matching-state", req, res);
+
+      expect(res.cookie).toHaveBeenCalledWith(
+        SESSION_COOKIE_NAME,
+        session.id,
+        expect.objectContaining({ secure: true, sameSite: "none" }),
+      );
     });
 
     it('rejects when the state query param does not match the oauth-state cookie', async () => {

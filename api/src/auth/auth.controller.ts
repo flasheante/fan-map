@@ -111,7 +111,19 @@ export class AuthController {
     return {
       httpOnly: true,
       secure: this.config.secureCookies,
-      sameSite: 'lax',
+      // web y api pueden ser sitios distintos en producción (Vercel + api
+      // desplegada aparte, no sólo puertos distintos como en dev): con
+      // SameSite=Lax el browser descarta esta cookie en los
+      // fetch(credentials:"include") cross-site del frontend (GET
+      // /auth/me, POST /fan-profiles, etc. — Lax sólo viaja en
+      // navegaciones de documento completas, como el propio redirect de
+      // /google/callback), así que el login "pega" en Google pero la app
+      // nunca ve la sesión. None arregla eso, y requiere Secure — por
+      // ende sólo se usa cuando `secureCookies` ya es true; en local
+      // (secureCookies=false, sin HTTPS) los browsers rechazan de plano
+      // una cookie None sin Secure, así que ahí se mantiene Lax, que ya
+      // alcanza porque localhost:3000/3001 son el mismo site.
+      sameSite: this.config.secureCookies ? 'none' : 'lax',
       signed: true,
       ...(maxAge !== undefined ? { maxAge } : {}),
     };
