@@ -111,4 +111,19 @@ describe("MapViewToggle", () => {
 
     expect(tourLink.className).not.toBe(fansLink.className);
   });
+
+  // Responsive básico: en pantallas angostas el toggle debe apilar/wrappear
+  // sus dos botones en vez de desbordar horizontalmente (mismo criterio que
+  // el header de MapExplorer, ver map-explorer.test.tsx).
+  it("wraps its buttons instead of overflowing on narrow screens", () => {
+    render(
+      <MapViewToggle
+        activeView="tour"
+        tourHref="/map"
+        fansHref="/map?view=fans"
+      />,
+    );
+
+    expect(screen.getByRole("navigation")).toHaveClass("flex-wrap");
+  });
 });

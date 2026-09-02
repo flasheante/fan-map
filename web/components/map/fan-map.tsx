@@ -55,7 +55,15 @@ export function FanMap({ fans }: FanMapProps) {
     });
   }, []);
 
-  if (fans.length === 0) {
+  // El caller ya pide GET /artists/:artistId/fans?onMap=true (ver
+  // getArtistFans en lib/api.ts), que en el backend filtra por showOnMap +
+  // ciudad con coordenadas. Este filtro es una segunda barrera, no la
+  // primera: el Fan Map nunca debe confiar en que todo lo que le llega ya
+  // es público, así que jamás pinta un marker para showOnMap=false aunque
+  // por lo que sea llegara uno.
+  const visibleFans = fans.filter((fan) => fan.showOnMap);
+
+  if (visibleFans.length === 0) {
     return (
       <div className="flex h-full w-full items-center justify-center">
         <p>Todavía no hay fans visibles en el mapa.</p>
@@ -63,7 +71,10 @@ export function FanMap({ fans }: FanMapProps) {
     );
   }
 
-  const center: LatLngTuple = [fans[0].city.latitude, fans[0].city.longitude];
+  const center: LatLngTuple = [
+    visibleFans[0].city.latitude,
+    visibleFans[0].city.longitude,
+  ];
 
   return (
     <MapContainer
@@ -75,8 +86,8 @@ export function FanMap({ fans }: FanMapProps) {
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
       />
-      <FitBounds fans={fans} />
-      {fans.map((fan) => (
+      <FitBounds fans={visibleFans} />
+      {visibleFans.map((fan) => (
         <Marker
           key={fan.id}
           position={[fan.city.latitude, fan.city.longitude]}

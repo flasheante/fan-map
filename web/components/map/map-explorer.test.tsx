@@ -173,4 +173,16 @@ describe("MapExplorer", () => {
       screen.getByRole("link", { name: /volver a the warning/i }),
     ).toHaveAttribute("href", "/artists/the-warning");
   });
+
+  // Responsive básico: el header de la vista Fan Map (logo + branding +
+  // contador) debe apilar en pantallas angostas en vez de desbordar, mismo
+  // criterio que el toggle (ver map-view-toggle.test.tsx).
+  it("wraps the fans view header instead of overflowing on narrow screens", () => {
+    setup("view=fans");
+    render(<MapExplorer artist={artist} shows={shows} fans={fans} />);
+
+    expect(screen.getByRole("heading", { level: 1 }).closest("header")).toHaveClass(
+      "flex-wrap",
+    );
+  });
 });

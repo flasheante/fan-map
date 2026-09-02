@@ -467,4 +467,16 @@ describe("TheWarningArtistPage", () => {
       "/artists/the-warning/tour",
     );
   });
+
+  // Etapa G, requisito 5: aunque el mapa que se ve por defecto acá sea el
+  // Historial (TourExplorer), tiene que haber una forma directa de llegar
+  // al Fan Map sin pasar por /join. Va a /map?view=fans, no a /map (que
+  // caería en Historial), y el nombre accesible "Fan Map" (con espacio) no
+  // matchea el CTA existente "Join the FanMap" (sin espacio).
+  it("renders a working CTA linking to the Fan Map", async () => {
+    await renderPage({ status: "ok", artist: makeArtist(), fans: [] });
+
+    const cta = screen.getByRole("link", { name: /fan map/i });
+    expect(cta).toHaveAttribute("href", "/map?view=fans");
+  });
 });

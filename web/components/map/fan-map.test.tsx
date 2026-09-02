@@ -117,6 +117,44 @@ describe("FanMap", () => {
     expect(screen.getByText(/Madrid, Spain/)).toBeInTheDocument();
   });
 
+  // El backend ya filtra por showOnMap cuando se pide ?onMap=true (ver
+  // getArtistFans en lib/api.ts), pero el Fan Map es la última línea de
+  // defensa antes de pintar algo en el DOM: nunca debe confiar ciegamente
+  // en que todo lo que recibe es público, aunque `fans` venga de esa misma
+  // llamada.
+  it("never renders a marker for a fan with showOnMap=false", () => {
+    const fans = [
+      makeFan({ id: "fan-1", displayName: "Public Fan", showOnMap: true }),
+      makeFan({ id: "fan-2", displayName: "Hidden Fan", showOnMap: false }),
+    ];
+
+    render(<FanMap fans={fans} />);
+
+    expect(screen.getAllByTestId("marker")).toHaveLength(1);
+    expect(screen.getByText("Public Fan")).toBeInTheDocument();
+    expect(screen.queryByText("Hidden Fan")).not.toBeInTheDocument();
+  });
+
+  // Privacidad: ArtistFan no declara email/userId (ver lib/api.ts), pero el
+  // backend podría en el futuro devolver campos de más en el mismo objeto
+  // (ej. un cambio accidental del select en el backend) — el Fan Map sólo
+  // debe leer displayName/city, nunca serializar el fan entero.
+  it("never renders email or userId even if present on the fan object", () => {
+    const fan = makeFan({
+      id: "fan-1",
+      displayName: "Public Fan",
+    }) as ArtistFan & { email: string; userId: string };
+    fan.email = "fan@example.com";
+    fan.userId = "user-secret-id";
+
+    render(<FanMap fans={[fan]} />);
+
+    expect(screen.queryByText(/fan@example\.com/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/user-secret-id/)).not.toBeInTheDocument();
+    expect(document.body.innerHTML).not.toContain("fan@example.com");
+    expect(document.body.innerHTML).not.toContain("user-secret-id");
+  });
+
   it("centers the map on the single fan when there is exactly one", () => {
     const fan = makeFan();
     render(<FanMap fans={[fan]} />);

@@ -22,8 +22,10 @@ import { getTheWarningTopSongsData } from "@/lib/the-warning-top-songs";
 // Etapa G: el mapa que se ve por defecto acá es el Historial de shows
 // (TourExplorer, el mismo componente que /artists/the-warning/tour y la
 // vista "tour" de /map — nunca una segunda implementación) en vez del Fan
-// Map. `mapData`/`fans` se conservan sólo para el contador y el banner de
-// "sumate" del header, que no dependen de qué mapa se muestra.
+// Map. `mapData`/`fans` se conservan sólo para el contador, el banner de
+// "sumate" del header y el CTA "Fan Map" (que no dependen de qué mapa se
+// muestra), que lleva directo a /map?view=fans: no hace falta pasar por
+// /join para ver a los demás fans.
 export default async function TheWarningArtistPage() {
   let artists;
   try {
@@ -107,6 +109,12 @@ export default async function TheWarningArtistPage() {
             className="rounded-full border border-white px-5 py-2.5 transition-colors hover:bg-zinc-900"
           >
             Historial de shows
+          </Link>
+          <Link
+            href="/map?view=fans"
+            className="rounded-full border border-white px-5 py-2.5 transition-colors hover:bg-zinc-900"
+          >
+            Fan Map
           </Link>
           <Link
             href="/join"
