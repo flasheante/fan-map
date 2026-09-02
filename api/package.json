@@ -19,6 +19,7 @@
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "sync:setlist-fm": "ts-node src/cli/sync-setlist-fm.ts",
+    "sync:musicbrainz": "ts-node src/cli/sync-musicbrainz.ts",
     "seed:demo": "ts-node scripts/seed-demo.ts"
   },
   "dependencies": {

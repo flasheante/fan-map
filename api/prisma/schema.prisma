@@ -62,6 +62,7 @@ model Artist {
   updatedAt DateTime    @updatedAt
   fans      FanArtist[]
   shows     Show[]
+  songs     Song[]
 
   @@map("artists")
 }
@@ -134,4 +135,26 @@ model SetlistSong {
   @@unique([setlistId, position])
   @@index([setlistId])
   @@map("setlist_songs")
+}
+
+// Catálogo canónico de canciones de un artista (estudio + EPs + singles),
+// sincronizado desde MusicBrainz — ver
+// src/integrations/musicbrainz y src/songs/musicbrainz-sync.service.ts.
+// Deliberadamente distinto de SetlistSong: SetlistSong es una fila por
+// canción tocada en un show puntual (puede repetirse show tras show);
+// Song es una fila por grabación real de MusicBrainz, una sola vez, para
+// que a futuro los fans puedan armar setlists eligiendo de acá.
+model Song {
+  id          String    @id @default(uuid())
+  artistId    String
+  title       String
+  albumTitle  String?
+  releaseDate DateTime?
+  mbid        String    @unique
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  artist      Artist    @relation(fields: [artistId], references: [id])
+
+  @@index([artistId])
+  @@map("songs")
 }

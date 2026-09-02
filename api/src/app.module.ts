@@ -8,6 +8,7 @@ import { ArtistsModule } from './artists/artists.module';
 import { ShowsModule } from './shows/shows.module';
 import { DemoSeedModule } from './demo-seed/demo-seed.module';
 import { AuthModule } from './auth/auth.module';
+import { SongsModule } from './songs/songs.module';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { AuthModule } from './auth/auth.module';
     ShowsModule,
     DemoSeedModule,
     AuthModule,
+    SongsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
