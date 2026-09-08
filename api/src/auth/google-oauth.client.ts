@@ -75,6 +75,7 @@ export class GoogleOAuthClient {
       email: payload.email,
       name: payload.name ?? null,
       emailVerified: payload.email_verified ?? false,
+      photoUrl: payload.picture ?? null,
     };
   }
 }

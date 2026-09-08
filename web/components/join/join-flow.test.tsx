@@ -4,10 +4,11 @@ import { fireEvent } from "@testing-library/react";
 import type { FanProfile } from "@/lib/api";
 import type { AuthStatus } from "@/components/auth/auth-provider";
 
-const { useAuth, getMyFanProfile, googleLoginUrl } = vi.hoisted(() => ({
+const { useAuth, getMyFanProfile, googleLoginUrl, useRouter } = vi.hoisted(() => ({
   useAuth: vi.fn(),
   getMyFanProfile: vi.fn(),
   googleLoginUrl: vi.fn(() => "http://localhost:3000/auth/google"),
+  useRouter: vi.fn(),
 }));
 
 vi.mock("@/components/auth/auth-provider", () => ({ useAuth }));
@@ -15,6 +16,7 @@ vi.mock("@/lib/api", () => ({ getMyFanProfile, googleLoginUrl }));
 vi.mock("@/components/join/fan-form", () => ({
   FanForm: () => <div data-testid="fan-form" />,
 }));
+vi.mock("next/navigation", () => ({ useRouter }));
 
 const { JoinFlow } = await import("./join-flow");
 
@@ -36,11 +38,26 @@ const fanProfile: FanProfile = {
     country: { id: "country-1", name: "Mexico", code: "MX" },
   },
   artists: [],
+  photoUrl: null,
+  setlistSongs: [],
+  favoriteSongs: [],
+  instagramUrl: null,
+  instagramIsPublic: false,
+  tiktokUrl: null,
+  tiktokIsPublic: false,
+  xUrl: null,
+  xIsPublic: false,
+  youtubeUrl: null,
+  youtubeIsPublic: false,
+  facebookUrl: null,
+  facebookIsPublic: false,
 };
 
 beforeEach(() => {
   useAuth.mockReset();
   getMyFanProfile.mockReset();
+  useRouter.mockReset();
+  useRouter.mockReturnValue({ replace: vi.fn(), push: vi.fn() });
 });
 
 describe("JoinFlow", () => {
@@ -95,18 +112,19 @@ describe("JoinFlow", () => {
     expect(await screen.findByTestId("fan-form")).toBeInTheDocument();
   });
 
-  it("shows a 'continue' state (not the form) when authenticated and already has a fan profile", async () => {
+  // Aclaración del usuario: entrar a /join ("Join the FanMap") ya logueado
+  // y con perfil no debe mostrar ninguna pantalla intermedia — va directo
+  // a /profile. El flujo sin perfil (formulario → mapa) queda igual.
+  it("redirects to /profile when authenticated and already has a fan profile, without rendering the form", async () => {
     mockAuth("authenticated", { id: "user-1", email: "fan@example.com" });
     getMyFanProfile.mockResolvedValue(fanProfile);
+    const replace = vi.fn();
+    useRouter.mockReturnValue({ replace, push: vi.fn() });
 
     render(<JoinFlow />);
 
-    await waitFor(() => expect(screen.queryByText(/cargando/i)).not.toBeInTheDocument());
+    await waitFor(() => expect(replace).toHaveBeenCalledWith("/profile"));
     expect(screen.queryByTestId("fan-form")).not.toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /mapa/i })).toHaveAttribute(
-      "href",
-      "/map?view=fans",
-    );
   });
 
   it("shows an error message when checking the fan profile fails", async () => {

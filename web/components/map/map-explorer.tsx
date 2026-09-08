@@ -7,6 +7,7 @@ import { TheWarningLogo } from "@/components/artists/the-warning-logo";
 import { TourExplorer } from "@/components/artists/tour-explorer";
 import { buildMapViewHref, parseMapView } from "@/lib/map-view";
 import { FanMapLoader } from "./fan-map-loader";
+import { FavoriteSongsRanking } from "./favorite-songs-ranking";
 import { MapViewToggle } from "./map-view-toggle";
 
 interface MapExplorerProps {
@@ -68,6 +69,8 @@ export function MapExplorer({ artist, shows, fans }: MapExplorerProps) {
               primero!
             </p>
           )}
+
+          <FavoriteSongsRanking />
         </>
       )}
     </>

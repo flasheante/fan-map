@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth/auth-provider";
 import { getMyFanProfile, googleLoginUrl, type FanProfile } from "@/lib/api";
 import { FanForm } from "@/components/join/fan-form";
@@ -12,8 +12,15 @@ type ProfileCheckStatus = "idle" | "loading" | "has-profile" | "no-profile" | "e
 // login; autenticado sin FanProfile → formulario; autenticado con
 // FanProfile → continuar; loading → sin flicker de ningún otro estado.
 // No toca /map ni /artists/the-warning: la UI de auth queda contenida acá.
+//
+// Etapa "navegación al fan profile": entrar a /join ("Join the FanMap") ya
+// logueado y con perfil ya no muestra ninguna pantalla intermedia — va
+// directo a /profile (router.replace, no push: no queremos que
+// "volver atrás" desde /profile te regrese a esta pantalla de tránsito).
+// El otro camino (sin perfil → FanForm → mapa) no cambia.
 export function JoinFlow() {
   const { status, user, logout } = useAuth();
+  const router = useRouter();
   const [profileStatus, setProfileStatus] = useState<ProfileCheckStatus>("idle");
 
   useEffect(() => {
@@ -38,6 +45,12 @@ export function JoinFlow() {
       cancelled = true;
     };
   }, [status]);
+
+  useEffect(() => {
+    if (profileStatus === "has-profile") {
+      router.replace("/profile");
+    }
+  }, [profileStatus, router]);
 
   if (status === "loading") {
     return <p className="text-zinc-600 dark:text-zinc-400">Cargando...</p>;
@@ -76,7 +89,9 @@ export function JoinFlow() {
         </button>
       </div>
 
-      {(profileStatus === "idle" || profileStatus === "loading") && (
+      {(profileStatus === "idle" ||
+        profileStatus === "loading" ||
+        profileStatus === "has-profile") && (
         <p className="text-zinc-600 dark:text-zinc-400">Cargando...</p>
       )}
 
@@ -84,18 +99,6 @@ export function JoinFlow() {
         <p role="alert" className="text-red-600 dark:text-red-400">
           No pudimos verificar tu perfil de fan. Intentá de nuevo más tarde.
         </p>
-      )}
-
-      {profileStatus === "has-profile" && (
-        <div className="flex flex-col gap-3 rounded-lg border border-zinc-200 p-6 dark:border-zinc-800">
-          <h2 className="text-lg font-semibold">Ya sos parte del mapa</h2>
-          <p className="text-zinc-600 dark:text-zinc-400">
-            Tu perfil de fan ya está creado.
-          </p>
-          <Link href="/map?view=fans" className="font-medium underline underline-offset-2">
-            Ver el mapa
-          </Link>
-        </div>
       )}
 
       {profileStatus === "no-profile" && <FanForm />}

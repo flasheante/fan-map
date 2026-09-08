@@ -7,4 +7,7 @@ export interface GoogleIdentity {
   email: string;
   name: string | null;
   emailVerified: boolean;
+  // Del claim `picture` del ID token — ya viene con el scope actual
+  // (openid/email/profile), Google no siempre lo entrega.
+  photoUrl: string | null;
 }

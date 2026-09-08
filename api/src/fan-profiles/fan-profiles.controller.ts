@@ -14,6 +14,7 @@ import { FanProfilesService } from './fan-profiles.service';
 import { CreateFanProfileDto } from './dto/create-fan-profile.dto';
 import { UpdateFanProfileDto } from './dto/update-fan-profile.dto';
 import { FindFanProfilesQueryDto } from './dto/find-fan-profiles-query.dto';
+import { FindFavoriteSongsRankingQueryDto } from './dto/find-favorite-songs-ranking-query.dto';
 import { SessionAuthGuard } from '../auth/session-auth.guard';
 import type { AuthenticatedRequest } from '../auth/interfaces/authenticated-request.interface';
 
@@ -44,6 +45,17 @@ export class FanProfilesController {
   @Get('me')
   findMine(@Req() req: AuthenticatedRequest) {
     return this.fanProfilesService.findMine(req.user!.id);
+  }
+
+  // Ranking de canciones favoritas del Fan Map (mundial/país/ciudad, ver
+  // FanProfilesService#findFavoriteSongsRanking) — público, sin sesión.
+  // Declarado ANTES de ':id' a propósito, mismo motivo que 'me' arriba:
+  // Nest/Express matchea rutas en orden de declaración, así que si fuera
+  // después, ':id' capturaría "stats" como id y ParseUUIDPipe lo
+  // rechazaría con 400 en vez de resolver esta ruta.
+  @Get('stats/favorite-songs')
+  findFavoriteSongsRanking(@Query() query: FindFavoriteSongsRankingQueryDto) {
+    return this.fanProfilesService.findFavoriteSongsRanking(query);
   }
 
   @Get(':id')

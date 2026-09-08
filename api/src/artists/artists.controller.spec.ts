@@ -10,6 +10,7 @@ describe('ArtistsController', () => {
     findFans: jest.Mock;
     findStats: jest.Mock;
     findTopSongs: jest.Mock;
+    findSongs: jest.Mock;
   };
 
   beforeEach(async () => {
@@ -19,6 +20,7 @@ describe('ArtistsController', () => {
       findFans: jest.fn(),
       findStats: jest.fn(),
       findTopSongs: jest.fn(),
+      findSongs: jest.fn(),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -95,5 +97,21 @@ describe('ArtistsController', () => {
 
     expect(service.findTopSongs).toHaveBeenCalledWith('artist-1');
     expect(result).toBe(topSongs);
+  });
+
+  // Etapa Perfil de FanMap: catálogo canónico (MusicBrainz), no el ranking
+  // de canciones tocadas en vivo — ver findTopSongs arriba, que es otra
+  // cosa. Necesario para que el frontend pueda ofrecer un picker de
+  // favoritas sin inventar un endpoint de búsqueda aparte.
+  it('gets the artist song catalog via the service', async () => {
+    const songs = [
+      { id: 'song-1', title: 'Automatic Sun', albumTitle: 'XXI Century Blood', releaseDate: '2017-03-27' },
+    ];
+    service.findSongs.mockResolvedValue(songs);
+
+    const result = await controller.findSongs('artist-1');
+
+    expect(service.findSongs).toHaveBeenCalledWith('artist-1');
+    expect(result).toBe(songs);
   });
 });

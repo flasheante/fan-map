@@ -33,4 +33,11 @@ export class ArtistsController {
   findTopSongs(@Param('artistId', ParseUUIDPipe) artistId: string) {
     return this.artistsService.findTopSongs(artistId);
   }
+
+  // Catálogo canónico (MusicBrainz) — ver ArtistsService#findSongs. Antes
+  // de ':artistId/songs/:id' porque no existe todavía (solo lista).
+  @Get(':artistId/songs')
+  findSongs(@Param('artistId', ParseUUIDPipe) artistId: string) {
+    return this.artistsService.findSongs(artistId);
+  }
 }

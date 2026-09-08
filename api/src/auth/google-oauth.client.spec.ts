@@ -61,7 +61,48 @@ describe('GoogleOAuthClient', () => {
         email: 'fan@example.com',
         name: 'Fan Name',
         emailVerified: true,
+        photoUrl: null,
       });
+    });
+
+    // Etapa Perfil de FanMap: el ID token ya trae `picture` con el scope
+    // actual (openid/email/profile, ver GOOGLE_OAUTH_SCOPES) — no hace
+    // falta pedir nada nuevo a Google, solo leer el claim.
+    it('includes the photo URL from the "picture" claim when present', async () => {
+      jest
+        .spyOn(OAuth2Client.prototype, 'getToken')
+        .mockResolvedValue({ tokens: { id_token: 'fake-id-token' } } as never);
+      const getPayload = jest.fn().mockReturnValue({
+        sub: 'google-subject-123',
+        email: 'fan@example.com',
+        email_verified: true,
+        picture: 'https://lh3.googleusercontent.com/a/photo.jpg',
+      });
+      jest
+        .spyOn(OAuth2Client.prototype, 'verifyIdToken')
+        .mockResolvedValue({ getPayload } as never);
+
+      const identity = await client.getIdentity('auth-code');
+
+      expect(identity.photoUrl).toBe('https://lh3.googleusercontent.com/a/photo.jpg');
+    });
+
+    it('defaults photoUrl to null when Google omits the "picture" claim', async () => {
+      jest
+        .spyOn(OAuth2Client.prototype, 'getToken')
+        .mockResolvedValue({ tokens: { id_token: 'fake-id-token' } } as never);
+      const getPayload = jest.fn().mockReturnValue({
+        sub: 'google-subject-123',
+        email: 'fan@example.com',
+        email_verified: true,
+      });
+      jest
+        .spyOn(OAuth2Client.prototype, 'verifyIdToken')
+        .mockResolvedValue({ getPayload } as never);
+
+      const identity = await client.getIdentity('auth-code');
+
+      expect(identity.photoUrl).toBeNull();
     });
 
     it('defaults name to null when Google does not provide one', async () => {

@@ -13,12 +13,15 @@ export class AuthService {
   // Busca el User por email; lo crea si no existe. Usa upsert (no
   // findUnique + create) para que la unicidad de email sea atómica a nivel
   // de base de datos: dos callbacks de login concurrentes con el mismo
-  // email no pueden crear dos filas. Solo se persiste `email` — ni
-  // googleId ni ningún otro dato de Google entra al modelo User en esta
-  // etapa (ver decisión en el informe final: el email alcanza para
-  // encontrar/crear el User que pide esta etapa, y `emailVerified` ya
+  // email no pueden crear dos filas. `googleId` sigue deliberadamente
+  // fuera de User (no lo pide ninguna etapa todavía) — `emailVerified` ya
   // filtra la única cuenta insegura relevante: un email no verificado por
-  // Google).
+  // Google.
+  //
+  // `googlePhotoUrl` sí se persiste, y se refresca en cada login (a
+  // diferencia de email, que nunca cambia acá): una foto de perfil de
+  // Google puede cambiar entre logins, así que `update` también la
+  // escribe, no solo `create`.
   async findOrCreateFromGoogle(identity: GoogleIdentity): Promise<User> {
     if (!identity.emailVerified) {
       throw new UnauthorizedException('Google account email is not verified');
@@ -26,8 +29,8 @@ export class AuthService {
 
     return this.prisma.user.upsert({
       where: { email: identity.email },
-      update: {},
-      create: { email: identity.email },
+      update: { googlePhotoUrl: identity.photoUrl },
+      create: { email: identity.email, googlePhotoUrl: identity.photoUrl },
     });
   }
 }

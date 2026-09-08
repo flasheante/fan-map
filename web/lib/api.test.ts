@@ -4,16 +4,20 @@ import {
   getArtistFans,
   getArtistShow,
   getArtistShows,
+  getArtistSongs,
   getArtistStats,
   getArtistTopSongs,
   getArtists,
   getCities,
   getCountries,
   getCurrentUser,
+  getFanProfile,
+  getFavoriteSongsRanking,
   getMyFanProfile,
   getShowSetlist,
   googleLoginUrl,
   logout,
+  updateFanProfile,
 } from "./api";
 
 function jsonResponse(body: unknown, ok = true, status = 200) {
@@ -568,5 +572,221 @@ describe("getMyFanProfile", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     await expect(getMyFanProfile()).rejects.toThrow(/500/);
+  });
+});
+
+describe("getFanProfile", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  const publicProfile = {
+    id: "profile-1",
+    displayName: "Fan One",
+    showOnMap: true,
+    createdAt: "2026-01-01T00:00:00.000Z",
+    updatedAt: "2026-01-01T00:00:00.000Z",
+    city: {
+      id: "city-1",
+      name: "Monterrey",
+      latitude: 25.6866,
+      longitude: -100.3161,
+      country: { id: "country-1", name: "Mexico", code: "MX" },
+    },
+    artists: [],
+    photoUrl: null,
+    setlistSongs: [],
+    favoriteSongs: [],
+    social: {},
+  };
+
+  it("fetches GET /fan-profiles/:id (no credentials needed) and returns the public profile", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(publicProfile));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await getFanProfile("profile-1");
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringMatching(/\/fan-profiles\/profile-1$/),
+      expect.objectContaining({ cache: "no-store" }),
+    );
+    expect(result).toEqual(publicProfile);
+  });
+
+  it("throws an error carrying the HTTP status when the profile does not exist", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(null, false, 404));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const error = await getFanProfile("missing-id").catch((e: unknown) => e);
+
+    expect((error as { status?: number }).status).toBe(404);
+  });
+});
+
+describe("updateFanProfile", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("PATCHes /fan-profiles/:id with the given payload, sending session credentials", async () => {
+    const updated = {
+      id: "profile-1",
+      displayName: "Renamed Fan",
+      showOnMap: true,
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z",
+      city: {
+        id: "city-1",
+        name: "Monterrey",
+        latitude: 25.6866,
+        longitude: -100.3161,
+        country: { id: "country-1", name: "Mexico", code: "MX" },
+      },
+      artists: [],
+      photoUrl: null,
+      setlistSongs: [],
+      favoriteSongs: [{ id: "song-1", title: "Automatic Sun", albumTitle: null, position: 1 }],
+      instagramUrl: null,
+      instagramIsPublic: false,
+      tiktokUrl: null,
+      tiktokIsPublic: false,
+      xUrl: null,
+      xIsPublic: false,
+      youtubeUrl: null,
+      youtubeIsPublic: false,
+      facebookUrl: null,
+      facebookIsPublic: false,
+    };
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(updated));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await updateFanProfile("profile-1", {
+      displayName: "Renamed Fan",
+      favoriteSongs: [{ songId: "song-1", position: 1 }],
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringMatching(/\/fan-profiles\/profile-1$/),
+      expect.objectContaining({
+        method: "PATCH",
+        credentials: "include",
+        headers: expect.objectContaining({ "Content-Type": "application/json" }),
+        body: JSON.stringify({
+          displayName: "Renamed Fan",
+          favoriteSongs: [{ songId: "song-1", position: 1 }],
+        }),
+      }),
+    );
+    expect(result).toEqual(updated);
+  });
+
+  // setlistSongs y favoriteSongs son dos campos independientes del mismo
+  // body — mandar uno no debe mandar el otro (el backend es quien decide
+  // no tocar la lista ausente, ver fan-profiles.service.spec.ts).
+  it("PATCHes setlistSongs independently of favoriteSongs", async () => {
+    const updated = { id: "profile-1" };
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(updated));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await updateFanProfile("profile-1", {
+      setlistSongs: [{ songId: "song-1", position: 1 }],
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        body: JSON.stringify({ setlistSongs: [{ songId: "song-1", position: 1 }] }),
+      }),
+    );
+  });
+
+  it("throws with the API error message when the response is not ok", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(jsonResponse({ message: "At most 15 favoriteSongs" }, false, 400));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      updateFanProfile("profile-1", { favoriteSongs: [] }),
+    ).rejects.toThrow(/At most 15 favoriteSongs/);
+  });
+});
+
+describe("getArtistSongs", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("fetches GET /artists/:artistId/songs and returns the parsed list", async () => {
+    const songs = [
+      { id: "song-1", title: "Automatic Sun", albumTitle: "XXI Century Blood", releaseDate: "2017-03-27" },
+    ];
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(songs));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await getArtistSongs("artist-1");
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringMatching(/\/artists\/artist-1\/songs$/),
+      expect.objectContaining({ cache: "no-store" }),
+    );
+    expect(result).toEqual(songs);
+  });
+
+  it("throws when the response is not ok", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(null, false, 404));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(getArtistSongs("missing-artist")).rejects.toThrow(/404/);
+  });
+});
+
+describe("getFavoriteSongsRanking", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("fetches GET /fan-profiles/stats/favorite-songs with no query when called without a filter (worldwide)", async () => {
+    const ranking = [{ songId: "song-1", title: "MORE", albumTitle: null, count: 5 }];
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(ranking));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await getFavoriteSongsRanking();
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringMatching(/\/fan-profiles\/stats\/favorite-songs$/),
+      expect.objectContaining({ cache: "no-store" }),
+    );
+    expect(result).toEqual(ranking);
+  });
+
+  it("sends countryId as a query param", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse([]));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await getFavoriteSongsRanking({ countryId: "country-1" });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("countryId=country-1"),
+      expect.any(Object),
+    );
+  });
+
+  it("sends cityId as a query param, and prefers it over countryId when both are given", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse([]));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await getFavoriteSongsRanking({ countryId: "country-1", cityId: "city-1" });
+
+    const url = fetchMock.mock.calls[0][0] as string;
+    expect(url).toContain("cityId=city-1");
+    expect(url).not.toContain("countryId");
+  });
+
+  it("throws when the response is not ok", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(null, false, 500));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(getFavoriteSongsRanking()).rejects.toThrow(/500/);
   });
 });

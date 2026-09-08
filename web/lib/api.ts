@@ -93,6 +93,36 @@ export interface FanProfileArtist {
   imageUrl: string | null;
 }
 
+// Una canción dentro de una de las dos listas posicionadas de un fan — el
+// setlist personal (hasta 15) o el Top 10 de favoritas (hasta 10). Mismo
+// shape para ambas: `position` siempre presente, ambas son listas
+// ordenadas de punta a punta, nunca "en la lista pero sin puesto" (ver
+// FanProfileSetlistSong / FanProfileFavoriteSong en el backend — dos
+// tablas independientes, no una sola con un topPosition opcional). Mismo
+// shape en la vista propia y la pública: ambas listas son siempre
+// públicas (ver FanProfilesService).
+export interface FanSongListItem {
+  id: string;
+  title: string;
+  albumTitle: string | null;
+  position: number;
+}
+
+// Redes sociales ya filtradas por privacidad — solo trae las claves de las
+// redes configuradas Y marcadas públicas (ver toPublicFanProfileResponse
+// en el backend). Una clave ausente = esa red no se muestra.
+export interface SocialLinks {
+  instagram?: string;
+  tiktok?: string;
+  x?: string;
+  youtube?: string;
+  facebook?: string;
+}
+
+// Shape devuelto por GET /fan-profiles/me, POST y PATCH /fan-profiles
+// (toOwnFanProfileResponse en el backend): el dueño ve las 5 redes
+// completas, configuradas o no, públicas o no — nunca se usa para mostrar
+// el perfil de otro user.
 export interface FanProfile {
   id: string;
   displayName: string;
@@ -101,6 +131,40 @@ export interface FanProfile {
   updatedAt: string;
   city: City;
   artists: FanProfileArtist[];
+  // Heredada del login de Google — ver AuthService#findOrCreateFromGoogle.
+  // Siempre pública si existe (sin toggle propio).
+  photoUrl: string | null;
+  // Dos listas completamente independientes — ver FanSongListItem arriba.
+  // Una canción puede estar en ninguna, una o ambas a la vez.
+  setlistSongs: FanSongListItem[];
+  favoriteSongs: FanSongListItem[];
+  instagramUrl: string | null;
+  instagramIsPublic: boolean;
+  tiktokUrl: string | null;
+  tiktokIsPublic: boolean;
+  xUrl: string | null;
+  xIsPublic: boolean;
+  youtubeUrl: string | null;
+  youtubeIsPublic: boolean;
+  facebookUrl: string | null;
+  facebookIsPublic: boolean;
+}
+
+// Shape devuelto por GET /fan-profiles/:id y GET /fan-profiles
+// (toPublicFanProfileResponse en el backend): cualquiera puede pedirlo,
+// sin sesión — nunca incluye email/userId ni una red marcada privada.
+export interface PublicFanProfile {
+  id: string;
+  displayName: string;
+  showOnMap: boolean;
+  createdAt: string;
+  updatedAt: string;
+  city: City;
+  artists: FanProfileArtist[];
+  photoUrl: string | null;
+  setlistSongs: FanSongListItem[];
+  favoriteSongs: FanSongListItem[];
+  social: SocialLinks;
 }
 
 export interface CreateFanProfileInput {
@@ -108,6 +172,50 @@ export interface CreateFanProfileInput {
   cityId: string;
   showOnMap?: boolean;
   artistIds?: string[];
+}
+
+// Un item de setlistSongs/favoriteSongs en el body de PATCH — mismo shape
+// que SetlistSongInput/FavoriteSongInput en el backend (ver
+// update-fan-profile.dto.ts): `position` siempre obligatoria, ambas listas
+// están ordenadas de punta a punta.
+export interface SongListItemInput {
+  songId: string;
+  position: number;
+}
+
+// Body de PATCH /fan-profiles/:id — todo opcional, mismo criterio que
+// UpdateFanProfileDto: enviar un campo lo reemplaza, no enviarlo lo deja
+// como está. `setlistSongs` y `favoriteSongs` son cada uno un reemplazo
+// completo de su propia colección (mismo patrón que artistIds) — son dos
+// listas completamente independientes, mandar una nunca toca a la otra.
+export interface UpdateFanProfileInput {
+  displayName?: string;
+  cityId?: string;
+  showOnMap?: boolean;
+  artistIds?: string[];
+  setlistSongs?: SongListItemInput[];
+  favoriteSongs?: SongListItemInput[];
+  instagramUrl?: string | null;
+  instagramIsPublic?: boolean;
+  tiktokUrl?: string | null;
+  tiktokIsPublic?: boolean;
+  xUrl?: string | null;
+  xIsPublic?: boolean;
+  youtubeUrl?: string | null;
+  youtubeIsPublic?: boolean;
+  facebookUrl?: string | null;
+  facebookIsPublic?: boolean;
+}
+
+// Shape devuelto por GET /artists/:artistId/songs (ver
+// ArtistsService#findSongs): el catálogo canónico sincronizado desde
+// MusicBrainz (src/songs/musicbrainz-sync.service.ts), no el ranking de
+// canciones tocadas en vivo (eso es ArtistTopSong, más abajo).
+export interface ArtistSong {
+  id: string;
+  title: string;
+  albumTitle: string | null;
+  releaseDate: string | null;
 }
 
 // Shape devuelto por GET /auth/me (ver SessionService.PublicUser /
@@ -250,6 +358,104 @@ export async function getMyFanProfile(): Promise<FanProfile | null> {
 
   if (!res.ok) {
     throw new Error(`Failed to fetch current fan profile: ${res.status}`);
+  }
+
+  return res.json();
+}
+
+// GET /fan-profiles/:id: perfil público de cualquier fan, sin sesión — ver
+// PublicFanProfile arriba. 404 = no existe.
+function fanProfileHttpError(message: string, status: number): Error {
+  return Object.assign(new Error(message), { status });
+}
+
+export async function getFanProfile(id: string): Promise<PublicFanProfile> {
+  const res = await fetch(`${API_URL}/fan-profiles/${id}`, {
+    cache: "no-store",
+  });
+
+  if (!res.ok) {
+    throw fanProfileHttpError(
+      `Failed to fetch fan profile ${id}: ${res.status}`,
+      res.status,
+    );
+  }
+
+  return res.json();
+}
+
+// PATCH /fan-profiles/:id: mismo criterio de ownership que createFanProfile
+// (credentials:"include" obligatorio, request.user.id del lado del
+// backend decide el dueño — nunca un campo del body).
+export async function updateFanProfile(
+  id: string,
+  input: UpdateFanProfileInput,
+): Promise<FanProfile> {
+  const res = await fetch(`${API_URL}/fan-profiles/${id}`, {
+    method: "PATCH",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+
+  if (!res.ok) {
+    const message = await extractErrorMessage(res);
+    throw new Error(message ?? `Failed to update fan profile: ${res.status}`);
+  }
+
+  return res.json();
+}
+
+export async function getArtistSongs(artistId: string): Promise<ArtistSong[]> {
+  const res = await fetch(`${API_URL}/artists/${artistId}/songs`, {
+    cache: "no-store",
+  });
+
+  if (!res.ok) {
+    throw new Error(`Failed to fetch songs for artist ${artistId}: ${res.status}`);
+  }
+
+  return res.json();
+}
+
+// Shape devuelto por GET /fan-profiles/stats/favorite-songs (ver
+// FanProfilesService#findFavoriteSongsRanking): ranking del Fan Map,
+// calculado exclusivamente a partir del Top 10 de favoritas de los fans
+// visibles en el mapa (showOnMap=true) — el setlist personal nunca
+// participa. Ya viene ordenado del backend: count DESC, title ASC como
+// desempate. Nunca trae datos de usuarios, solo lo necesario para el
+// ranking.
+export interface FavoriteSongRankingEntry {
+  songId: string;
+  title: string;
+  albumTitle: string | null;
+  count: number;
+}
+
+export interface FavoriteSongsRankingFilter {
+  countryId?: string;
+  cityId?: string;
+}
+
+// Sin filtro: ranking mundial. Con cityId, ese gana sobre countryId si se
+// pasaran los dos juntos (ver el backend) — la UI del Fan Map solo debería
+// mandar uno de los dos por vez (mundial/país/ciudad son mutuamente
+// excluyentes, ver components/map/favorite-songs-ranking.tsx).
+export async function getFavoriteSongsRanking(
+  filter: FavoriteSongsRankingFilter = {},
+): Promise<FavoriteSongRankingEntry[]> {
+  const params = new URLSearchParams();
+  if (filter.cityId) params.set("cityId", filter.cityId);
+  else if (filter.countryId) params.set("countryId", filter.countryId);
+
+  const query = params.toString();
+  const res = await fetch(
+    `${API_URL}/fan-profiles/stats/favorite-songs${query ? `?${query}` : ""}`,
+    { cache: "no-store" },
+  );
+
+  if (!res.ok) {
+    throw new Error(`Failed to fetch favorite songs ranking: ${res.status}`);
   }
 
   return res.json();

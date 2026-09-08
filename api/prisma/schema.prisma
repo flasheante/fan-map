@@ -7,12 +7,19 @@ datasource db {
 }
 
 model User {
-  id         String      @id @default(uuid())
-  email      String      @unique
-  createdAt  DateTime    @default(now())
-  updatedAt  DateTime    @updatedAt
-  fanProfile FanProfile?
-  sessions   Session[]
+  id             String      @id @default(uuid())
+  email          String      @unique
+  // Foto de perfil heredada del ID token de Google (claim `picture`) — ver
+  // GoogleOAuthClient#getIdentity y AuthService#findOrCreateFromGoogle.
+  // Nunca un archivo propio: solo la URL que Google ya aloja. Nullable
+  // porque Google no siempre la entrega. Vive en User (identidad), no en
+  // FanProfile: aunque hoy la relación sea 1:1, es un dato de la cuenta,
+  // no del perfil de fan.
+  googlePhotoUrl String?
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+  fanProfile     FanProfile?
+  sessions       Session[]
 
   @@map("users")
 }
@@ -68,16 +75,33 @@ model Artist {
 }
 
 model FanProfile {
-  id          String      @id @default(uuid())
-  userId      String      @unique
-  cityId      String
-  displayName String
-  showOnMap   Boolean     @default(false)
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
-  artists     FanArtist[]
-  city        City        @relation(fields: [cityId], references: [id])
-  user        User        @relation(fields: [userId], references: [id])
+  id                String                   @id @default(uuid())
+  userId            String                   @unique
+  cityId            String
+  displayName       String
+  showOnMap         Boolean                  @default(false)
+  // 5 redes fijas, cada una con su propio par url/isPublic — a propósito,
+  // no una tabla genérica de "social links": son 5 plataformas conocidas y
+  // fijas, no un catálogo abierto (ver fan-profiles.service.ts). Cargar
+  // una URL nunca la hace pública por sí sola: isPublic siempre arranca en
+  // false y el usuario lo activa explícitamente.
+  instagramUrl      String?
+  instagramIsPublic Boolean                  @default(false)
+  tiktokUrl         String?
+  tiktokIsPublic    Boolean                  @default(false)
+  xUrl              String?
+  xIsPublic         Boolean                  @default(false)
+  youtubeUrl        String?
+  youtubeIsPublic   Boolean                  @default(false)
+  facebookUrl       String?
+  facebookIsPublic  Boolean                  @default(false)
+  createdAt         DateTime                 @default(now())
+  updatedAt         DateTime                 @updatedAt
+  artists           FanArtist[]
+  setlistSongs      FanProfileSetlistSong[]
+  favoriteSongs     FanProfileFavoriteSong[]
+  city              City                     @relation(fields: [cityId], references: [id])
+  user              User                     @relation(fields: [userId], references: [id])
 
   @@index([showOnMap])
   @@index([cityId])
@@ -145,16 +169,65 @@ model SetlistSong {
 // Song es una fila por grabación real de MusicBrainz, una sola vez, para
 // que a futuro los fans puedan armar setlists eligiendo de acá.
 model Song {
-  id          String    @id @default(uuid())
+  id          String                   @id @default(uuid())
   artistId    String
   title       String
   albumTitle  String?
   releaseDate DateTime?
-  mbid        String    @unique
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  artist      Artist    @relation(fields: [artistId], references: [id])
+  mbid        String                   @unique
+  createdAt   DateTime                 @default(now())
+  updatedAt   DateTime                 @updatedAt
+  artist      Artist                   @relation(fields: [artistId], references: [id])
+  setlistedBy FanProfileSetlistSong[]
+  favoritedBy FanProfileFavoriteSong[]
 
   @@index([artistId])
   @@map("songs")
+}
+
+// Etapa "Setlist + Top 10 independientes": reemplaza al viejo
+// FanProfileSong (favoritas y Top10 en una sola tabla, unidas por un
+// topPosition nullable). Ahora son dos tablas separadas, sin relación
+// obligatoria entre sí — una canción puede estar en ninguna, una o ambas
+// listas de un mismo fan, de forma completamente independiente.
+//
+// El setlist personal de un fan (hasta 15 canciones, validado en la
+// aplicación — ver FanProfilesService, no acá): a diferencia de las
+// viejas "favoritas", acá TODA fila tiene una posición — no existe el
+// concepto de "en la lista pero sin puesto", el orden es el punto central
+// de un setlist. PK compuesta evita duplicar una canción en el mismo
+// perfil; unique de (fanProfileId, position) evita dos canciones en el
+// mismo puesto. Ver migration.sql para el CHECK de position 1-15.
+model FanProfileSetlistSong {
+  fanProfileId String
+  songId       String
+  position     Int
+  createdAt    DateTime   @default(now())
+  fanProfile   FanProfile @relation(fields: [fanProfileId], references: [id], onDelete: Cascade)
+  song         Song       @relation(fields: [songId], references: [id])
+
+  @@id([fanProfileId, songId])
+  @@unique([fanProfileId, position])
+  @@index([songId])
+  @@map("fan_profile_setlist_songs")
+}
+
+// Top 10 de canciones favoritas de un fan — independiente del setlist de
+// arriba (ver el comentario de FanProfileSetlistSong). Es también la
+// fuente exclusiva de los rankings del Fan Map (mundial/país/ciudad, ver
+// FanProfilesService#findFavoriteSongsRanking): el setlist personal nunca
+// participa de esos rankings. Mismo criterio de position 1-10 siempre
+// presente, CHECK en migration.sql.
+model FanProfileFavoriteSong {
+  fanProfileId String
+  songId       String
+  position     Int
+  createdAt    DateTime   @default(now())
+  fanProfile   FanProfile @relation(fields: [fanProfileId], references: [id], onDelete: Cascade)
+  song         Song       @relation(fields: [songId], references: [id])
+
+  @@id([fanProfileId, songId])
+  @@unique([fanProfileId, position])
+  @@index([songId])
+  @@map("fan_profile_favorite_songs")
 }

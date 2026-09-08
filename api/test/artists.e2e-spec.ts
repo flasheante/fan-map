@@ -835,6 +835,114 @@ describe('Artists (e2e)', () => {
     });
   });
 
+  describe('GET /artists/:artistId/songs', () => {
+    // Catálogo canónico (MusicBrainz), no el ranking de tocadas en vivo —
+    // ver el describe de arriba, que es otra cosa. Su propio set de datos.
+    const catalogSuffix = randomUUID().slice(0, 8);
+    const artistName = `Catalog Artist ${catalogSuffix}`;
+    const artistSlug = `catalog-artist-${catalogSuffix}`;
+    const otherArtistName = `Catalog Other Artist ${catalogSuffix}`;
+    const otherArtistSlug = `catalog-other-artist-${catalogSuffix}`;
+
+    let catalogArtistId: string;
+    let otherArtistId: string;
+    let songAId: string;
+    let songBId: string;
+    let otherArtistSongId: string;
+
+    beforeAll(async () => {
+      const artist = await prisma.artist.create({
+        data: { name: artistName, slug: artistSlug },
+      });
+      catalogArtistId = artist.id;
+
+      const otherArtist = await prisma.artist.create({
+        data: { name: otherArtistName, slug: otherArtistSlug },
+      });
+      otherArtistId = otherArtist.id;
+
+      const songB = await prisma.song.create({
+        data: {
+          artistId: catalogArtistId,
+          title: `Catalog Song B ${catalogSuffix}`,
+          albumTitle: 'Album Two',
+          mbid: `catalog-mbid-b-${catalogSuffix}`,
+        },
+      });
+      songBId = songB.id;
+
+      const songA = await prisma.song.create({
+        data: {
+          artistId: catalogArtistId,
+          title: `Catalog Song A ${catalogSuffix}`,
+          albumTitle: 'Album One',
+          mbid: `catalog-mbid-a-${catalogSuffix}`,
+        },
+      });
+      songAId = songA.id;
+
+      const otherArtistSong = await prisma.song.create({
+        data: {
+          artistId: otherArtistId,
+          title: `Other Artist Catalog Song ${catalogSuffix}`,
+          mbid: `catalog-mbid-other-${catalogSuffix}`,
+        },
+      });
+      otherArtistSongId = otherArtistSong.id;
+    });
+
+    afterAll(async () => {
+      await prisma.song.deleteMany({
+        where: { id: { in: [songAId, songBId, otherArtistSongId] } },
+      });
+      await prisma.artist.deleteMany({
+        where: { id: { in: [catalogArtistId, otherArtistId] } },
+      });
+    });
+
+    it('returns the songs for the given artist, sorted by title', async () => {
+      const response = await request(app.getHttpServer())
+        .get(`/artists/${catalogArtistId}/songs`)
+        .expect(200);
+
+      expect(response.body).toEqual([
+        {
+          id: songAId,
+          title: `Catalog Song A ${catalogSuffix}`,
+          albumTitle: 'Album One',
+          releaseDate: null,
+        },
+        {
+          id: songBId,
+          title: `Catalog Song B ${catalogSuffix}`,
+          albumTitle: 'Album Two',
+          releaseDate: null,
+        },
+      ]);
+    });
+
+    it('does not mix in songs from another artist', async () => {
+      const response = await request(app.getHttpServer())
+        .get(`/artists/${catalogArtistId}/songs`)
+        .expect(200);
+
+      const ids: string[] = response.body.map((song: { id: string }) => song.id);
+      expect(ids).not.toContain(otherArtistSongId);
+    });
+
+    it('returns 400 when the artistId is not a valid UUID', async () => {
+      await request(app.getHttpServer())
+        .get('/artists/not-a-uuid/songs')
+        .expect(400);
+    });
+
+    it('returns 404 when the artist does not exist', async () => {
+      await request(app.getHttpServer())
+        .get(`/artists/${randomUUID()}/songs`)
+        .expect(404);
+    });
+  });
+
   describe('Seed data', () => {
     // Mirrors the idempotent upsert in prisma/seed.ts. Not cleaned up in
     // afterAll: it represents permanent seed data, not a test fixture.

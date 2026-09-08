@@ -14,6 +14,7 @@ describe('FanProfilesController', () => {
     findMine: jest.Mock;
     findAll: jest.Mock;
     update: jest.Mock;
+    findFavoriteSongsRanking: jest.Mock;
   };
 
   beforeEach(() => {
@@ -23,6 +24,7 @@ describe('FanProfilesController', () => {
       findMine: jest.fn(),
       findAll: jest.fn(),
       update: jest.fn(),
+      findFavoriteSongsRanking: jest.fn(),
     };
 
     controller = new FanProfilesController(
@@ -138,5 +140,18 @@ describe('FanProfilesController', () => {
 
     expect(service.update).toHaveBeenCalledWith('profile-1', 'user-1', dto);
     expect(result).toBe(updated);
+  });
+
+  // Etapa "Setlist + Top 10 independientes": ranking del Fan Map, público,
+  // sin sesión.
+  it('gets the favorite songs ranking via the service, with the given filters', async () => {
+    const query = { countryId: 'country-1' };
+    const ranking = [{ songId: 'song-1', title: 'MORE', albumTitle: null, count: 5 }];
+    service.findFavoriteSongsRanking.mockResolvedValue(ranking);
+
+    const result = await controller.findFavoriteSongsRanking(query);
+
+    expect(service.findFavoriteSongsRanking).toHaveBeenCalledWith(query);
+    expect(result).toBe(ranking);
   });
 });

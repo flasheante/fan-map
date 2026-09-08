@@ -26,6 +26,12 @@ vi.mock("@/components/map/fan-map-loader", () => ({
   ),
 }));
 
+// El ranking (ver favorite-songs-ranking.test.tsx) tiene su propia
+// cobertura completa; acá sólo interesa que se monte en la vista de fans.
+vi.mock("@/components/map/favorite-songs-ranking", () => ({
+  FavoriteSongsRanking: () => <div data-testid="favorite-songs-ranking" />,
+}));
+
 const { MapExplorer } = await import("./map-explorer");
 
 const PATHNAME = "/map";
@@ -163,6 +169,20 @@ describe("MapExplorer", () => {
       "aria-current",
       "page",
     );
+  });
+
+  it("shows the favorite songs ranking on the fans view", () => {
+    setup("view=fans");
+    render(<MapExplorer artist={artist} shows={shows} fans={fans} />);
+
+    expect(screen.getByTestId("favorite-songs-ranking")).toBeInTheDocument();
+  });
+
+  it("does not show the favorite songs ranking on the tour view", () => {
+    setup("view=tour");
+    render(<MapExplorer artist={artist} shows={shows} fans={fans} />);
+
+    expect(screen.queryByTestId("favorite-songs-ranking")).not.toBeInTheDocument();
   });
 
   it("offers a way back to the artist page", () => {

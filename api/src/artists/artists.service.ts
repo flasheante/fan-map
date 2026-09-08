@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { Artist, City, Country, FanProfile, Prisma } from '@prisma/client';
+import { Artist, City, Country, FanProfile, Prisma, Song } from '@prisma/client';
 import { PrismaService } from '../database/prisma.service';
 import { FindArtistFansQueryDto } from './dto/find-artist-fans-query.dto';
 
@@ -126,6 +126,28 @@ export class ArtistsService {
       timesPlayed: row._count.title,
     }));
   }
+
+  // Catálogo canónico de canciones del artista (sincronizado desde
+  // MusicBrainz, ver src/songs/musicbrainz-sync.service.ts) — no el
+  // ranking de canciones tocadas en vivo (eso es findTopSongs, sobre
+  // SetlistSong). Público y de solo lectura: es la fuente para que el
+  // frontend arme el picker de favoritas del perfil de fan (ver el
+  // pedido: "buscar canciones"), sin exponer nada privado.
+  async findSongs(artistId: string) {
+    const artist = await this.prisma.artist.findUnique({
+      where: { id: artistId },
+    });
+    if (!artist) {
+      throw new NotFoundException(`Artist ${artistId} not found`);
+    }
+
+    const songs = await this.prisma.song.findMany({
+      where: { artistId },
+      orderBy: { title: 'asc' },
+    });
+
+    return songs.map(toArtistSongResponse);
+  }
 }
 
 function toArtistResponse(artist: Artist) {
@@ -136,6 +158,15 @@ function toArtistResponse(artist: Artist) {
     imageUrl: artist.imageUrl,
     createdAt: artist.createdAt,
     updatedAt: artist.updatedAt,
+  };
+}
+
+function toArtistSongResponse(song: Song) {
+  return {
+    id: song.id,
+    title: song.title,
+    albumTitle: song.albumTitle,
+    releaseDate: song.releaseDate,
   };
 }
 

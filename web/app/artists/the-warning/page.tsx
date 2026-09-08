@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ArtistStatsSummary } from "@/components/artists/artist-stats";
+import { JoinOrProfileLink } from "@/components/artists/join-or-profile-link";
 import { TheWarningLogo } from "@/components/artists/the-warning-logo";
 import { TopSongs } from "@/components/artists/top-songs";
 import { TourExplorer } from "@/components/artists/tour-explorer";
@@ -116,12 +117,7 @@ export default async function TheWarningArtistPage() {
           >
             Fan Map
           </Link>
-          <Link
-            href="/join"
-            className="rounded-full bg-white px-5 py-2.5 text-black transition-colors hover:bg-zinc-200"
-          >
-            Join the FanMap
-          </Link>
+          <JoinOrProfileLink />
         </div>
       </header>
       <ArtistStatsSummary stats={stats} />

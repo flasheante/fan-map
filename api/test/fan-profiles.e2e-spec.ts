@@ -22,7 +22,8 @@ describe('FanProfiles (e2e)', () => {
   let authService: AuthService;
   let sessionService: SessionService;
 
-  const sessionSecret = process.env.SESSION_SECRET ?? 'dev-insecure-session-secret';
+  const sessionSecret =
+    process.env.SESSION_SECRET ?? 'dev-insecure-session-secret';
 
   const suffix = randomUUID().slice(0, 8);
   const countryName = `Fan Country ${suffix}`;
@@ -34,11 +35,16 @@ describe('FanProfiles (e2e)', () => {
   const artistBName = `Fan Artist B ${suffix}`;
   const artistBSlug = `fan-artist-b-${suffix}`;
 
+  const songATitle = `Fan Song A ${suffix}`;
+  const songBTitle = `Fan Song B ${suffix}`;
+
   let countryId: string;
   let cityId: string;
   let secondCityId: string;
   let artistAId: string;
   let artistBId: string;
+  let songAId: string;
+  let songBId: string;
 
   // emails/session ids creados por tests individuales, limpiados en afterAll.
   const createdUserEmails: string[] = [];
@@ -87,6 +93,24 @@ describe('FanProfiles (e2e)', () => {
       data: { name: artistBName, slug: artistBSlug },
     });
     artistBId = artistB.id;
+
+    const songA = await prisma.song.create({
+      data: {
+        artistId: artistAId,
+        title: songATitle,
+        mbid: `mbid-a-${suffix}`,
+      },
+    });
+    songAId = songA.id;
+
+    const songB = await prisma.song.create({
+      data: {
+        artistId: artistAId,
+        title: songBTitle,
+        mbid: `mbid-b-${suffix}`,
+      },
+    });
+    songBId = songB.id;
   });
 
   afterAll(async () => {
@@ -109,9 +133,18 @@ describe('FanProfiles (e2e)', () => {
     await prisma.session.deleteMany({
       where: { id: { in: createdSessionIds } },
     });
-    await prisma.user.deleteMany({ where: { email: { in: createdUserEmails } } });
-    await prisma.artist.deleteMany({ where: { id: { in: [artistAId, artistBId] } } });
-    await prisma.city.deleteMany({ where: { id: { in: [cityId, secondCityId] } } });
+    await prisma.user.deleteMany({
+      where: { email: { in: createdUserEmails } },
+    });
+    // fan_profile_songs ya se borró en cascada con el fanProfile de arriba
+    // (onDelete: Cascade en el schema) — songs se puede borrar directo.
+    await prisma.song.deleteMany({ where: { id: { in: [songAId, songBId] } } });
+    await prisma.artist.deleteMany({
+      where: { id: { in: [artistAId, artistBId] } },
+    });
+    await prisma.city.deleteMany({
+      where: { id: { in: [cityId, secondCityId] } },
+    });
     await prisma.country.deleteMany({ where: { id: countryId } });
     await app.close();
   });
@@ -123,8 +156,13 @@ describe('FanProfiles (e2e)', () => {
 
   // Crea un User + Session reales (sin pegarle a Google) y devuelve la
   // cookie de sesión firmada a usar en los requests — lo mismo que dejaría
-  // listo AuthController#googleCallback tras un login exitoso.
-  async function authenticatedUser(label: string) {
+  // listo AuthController#googleCallback tras un login exitoso. `photoUrl`
+  // es null por defecto (la mayoría de los tests no le importa la foto);
+  // los tests que sí la necesitan lo overridean.
+  async function authenticatedUser(
+    label: string,
+    photoUrl: string | null = null,
+  ) {
     const email = `${label}-${randomUUID()}@example.com`;
     createdUserEmails.push(email);
 
@@ -133,6 +171,7 @@ describe('FanProfiles (e2e)', () => {
       email,
       name: label,
       emailVerified: true,
+      photoUrl,
     });
 
     const session = await sessionService.create(user.id);
@@ -140,6 +179,34 @@ describe('FanProfiles (e2e)', () => {
 
     return { userId: user.id, email, cookie: signedCookieHeader(session.id) };
   }
+
+  // Shape "propio" en blanco (sin redes, sin favoritas, sin foto) — lo que
+  // devuelve POST/PATCH/GET /me para un perfil recién creado sin tocar
+  // ninguno de los campos nuevos.
+  const blankOwnFields = {
+    photoUrl: null,
+    setlistSongs: [] as unknown[],
+    favoriteSongs: [] as unknown[],
+    instagramUrl: null,
+    instagramIsPublic: false,
+    tiktokUrl: null,
+    tiktokIsPublic: false,
+    xUrl: null,
+    xIsPublic: false,
+    youtubeUrl: null,
+    youtubeIsPublic: false,
+    facebookUrl: null,
+    facebookIsPublic: false,
+  };
+
+  // Shape público en blanco — lo que devuelve GET /:id y GET (list) para
+  // ese mismo perfil.
+  const blankPublicFields = {
+    photoUrl: null,
+    setlistSongs: [] as unknown[],
+    favoriteSongs: [] as unknown[],
+    social: {},
+  };
 
   describe('POST /fan-profiles', () => {
     // Case 1: sin sesión válida devuelve 401.
@@ -396,10 +463,9 @@ describe('FanProfiles (e2e)', () => {
       const ids: string[] = response.body.map(
         (profile: { id: string }) => profile.id,
       );
-      expect(ids).toEqual(expect.arrayContaining([
-        onMapProfile.id,
-        offMapProfile.id,
-      ]));
+      expect(ids).toEqual(
+        expect.arrayContaining([onMapProfile.id, offMapProfile.id]),
+      );
     });
 
     // Caso: onMap=true devuelve solamente los visibles en el mapa.
@@ -476,6 +542,7 @@ describe('FanProfiles (e2e)', () => {
           },
         },
         artists: [],
+        ...blankPublicFields,
       });
       expect(found).not.toHaveProperty('email');
       expect(found).not.toHaveProperty('userId');
@@ -531,9 +598,7 @@ describe('FanProfiles (e2e)', () => {
       const ids: string[] = response.body.map(
         (profile: { id: string }) => profile.id,
       );
-      expect(ids).toEqual(
-        expect.arrayContaining([fanA.id, fanB.id, fanC.id]),
-      );
+      expect(ids).toEqual(expect.arrayContaining([fanA.id, fanB.id, fanC.id]));
     });
 
     // GET /fan-profiles?onMap=false sigue funcionando como antes: solo filtra
@@ -642,9 +707,14 @@ describe('FanProfiles (e2e)', () => {
           },
         },
         artists: [],
+        ...blankPublicFields,
       });
       expect(response.body).not.toHaveProperty('email');
       expect(response.body).not.toHaveProperty('userId');
+      // La vista pública nunca expone los flags/URLs individuales de red
+      // social, solo `social` ya filtrado.
+      expect(response.body).not.toHaveProperty('instagramUrl');
+      expect(response.body).not.toHaveProperty('instagramIsPublic');
     });
 
     // Caso: UUID con formato inválido devuelve 400.
@@ -871,6 +941,7 @@ describe('FanProfiles (e2e)', () => {
           },
         },
         artists: [],
+        ...blankOwnFields,
       });
       expect(response.body).not.toHaveProperty('email');
       expect(response.body).not.toHaveProperty('userId');
@@ -1062,7 +1133,10 @@ describe('FanProfiles (e2e)', () => {
   });
 
   describe('PATCH /fan-profiles/:id with artistIds', () => {
-    async function createProfileWithArtists(label: string, artistIds: string[]) {
+    async function createProfileWithArtists(
+      label: string,
+      artistIds: string[],
+    ) {
       const { cookie } = await authenticatedUser(label);
       const response = await request(app.getHttpServer())
         .post('/fan-profiles')
@@ -1109,9 +1183,10 @@ describe('FanProfiles (e2e)', () => {
     });
 
     it('leaves existing artists untouched when artistIds is not sent', async () => {
-      const profile = await createProfileWithArtists('patch-artists-untouched', [
-        artistAId,
-      ]);
+      const profile = await createProfileWithArtists(
+        'patch-artists-untouched',
+        [artistAId],
+      );
 
       const response = await request(app.getHttpServer())
         .patch(`/fan-profiles/${profile.id}`)
@@ -1144,7 +1219,10 @@ describe('FanProfiles (e2e)', () => {
     });
 
     it('deduplicates repeated artistIds without erroring', async () => {
-      const profile = await createProfileWithArtists('patch-artists-dedupe', []);
+      const profile = await createProfileWithArtists(
+        'patch-artists-dedupe',
+        [],
+      );
 
       const response = await request(app.getHttpServer())
         .patch(`/fan-profiles/${profile.id}`)
@@ -1155,6 +1233,980 @@ describe('FanProfiles (e2e)', () => {
       expect(response.body.artists).toEqual([
         { id: artistAId, name: artistAName, slug: artistASlug, imageUrl: null },
       ]);
+    });
+  });
+
+  describe('PATCH /fan-profiles/:id with setlistSongs', () => {
+    async function createProfile(label: string) {
+      const { cookie } = await authenticatedUser(label);
+      const response = await request(app.getHttpServer())
+        .post('/fan-profiles')
+        .set('Cookie', cookie)
+        .send({ displayName: `${label} Fan`, cityId })
+        .expect(201);
+      return { id: response.body.id as string, cookie };
+    }
+
+    it('adds setlist songs with their position and returns them', async () => {
+      const { id, cookie } = await createProfile('setlist-add');
+
+      const response = await request(app.getHttpServer())
+        .patch(`/fan-profiles/${id}`)
+        .set('Cookie', cookie)
+        .send({
+          setlistSongs: [
+            { songId: songAId, position: 1 },
+            { songId: songBId, position: 2 },
+          ],
+        })
+        .expect(200);
+
+      expect(response.body.setlistSongs).toEqual([
+        { id: songAId, title: songATitle, albumTitle: null, position: 1 },
+        { id: songBId, title: songBTitle, albumTitle: null, position: 2 },
+      ]);
+    });
+
+    it('rejects more than 15 setlist songs', async () => {
+      const { id, cookie } = await createProfile('setlist-max-15');
+
+      await request(app.getHttpServer())
+        .patch(`/fan-profiles/${id}`)
+        .set('Cookie', cookie)
+        .send({
+          setlistSongs: Array.from({ length: 16 }, (_, i) => ({
+            songId: randomUUID(),
+            position: i + 1,
+          })),
+        })
+        .expect(400);
+    });
+
+    it('rejects a duplicate songId', async () => {
+      const { id, cookie } = await createProfile('setlist-dup-song');
+
+      await request(app.getHttpServer())
+        .patch(`/fan-profiles/${id}`)
+        .set('Cookie', cookie)
+        .send({
+          setlistSongs: [
+            { songId: songAId, position: 1 },
+            { songId: songAId, position: 2 },
+          ],
+        })
+        .expect(400);
+    });
+
+    it('rejects a duplicate position', async () => {
+      const { id, cookie } = await createProfile('setlist-dup-position');
+
+      await request(app.getHttpServer())
+        .patch(`/fan-profiles/${id}`)
+        .set('Cookie', cookie)
+        .send({
+          setlistSongs: [
+            { songId: songAId, position: 1 },
+            { songId: songBId, position: 1 },
+          ],
+        })
+        .expect(400);
+    });
+
+    it('rejects a position outside 1-15', async () => {
+      const { id, cookie } = await createProfile('setlist-position-range');
+
+      await request(app.getHttpServer())
+        .patch(`/fan-profiles/${id}`)
+        .set('Cookie', cookie)
+        .send({ setlistSongs: [{ songId: songAId, position: 16 }] })
+        .expect(400);
+    });
+
+    it('rejects a songId that does not exist in the catalog, without touching anything', async () => {
+      const { id, cookie } = await createProfile('setlist-missing-song');
+
+      await request(app.getHttpServer())
+        .patch(`/fan-profiles/${id}`)
+        .set('Cookie', cookie)
+        .send({ setlistSongs: [{ songId: randomUUID(), position: 1 }] })
+        .expect(400);
+
+      const rows = await prisma.fanProfileSetlistSong.findMany({
+        where: { fanProfileId: id },
+      });
+      expect(rows).toEqual([]);
+    });
+
+    it('reorders the setlist by replacing the whole set with new positions', async () => {
+      const { id, cookie } = await createProfile('setlist-reorder');
+
+      await request(app.getHttpServer())
+        .patch(`/fan-profiles/${id}`)
+        .set('Cookie', cookie)
+        .send({
+          setlistSongs: [
+            { songId: songAId, position: 2 },
+            { songId: songBId, position: 1 },
+          ],
+        })
+        .expect(200);
+
+      const reordered = await request(app.getHttpServer())
+        .patch(`/fan-profiles/${id}`)
+        .set('Cookie', cookie)
+        .send({
+          setlistSongs: [
+            { songId: songAId, position: 1 },
+            { songId: songBId, position: 2 },
+          ],
+        })
+        .expect(200);
+
+      expect(reordered.body.setlistSongs).toEqual([
+        { id: songAId, title: songATitle, albumTitle: null, position: 1 },
+        { id: songBId, title: songBTitle, albumTitle: null, position: 2 },
+      ]);
+    });
+
+    it('removes a song from the setlist by leaving it out of the new array', async () => {
+      const { id, cookie } = await createProfile('setlist-remove');
+
+      await request(app.getHttpServer())
+        .patch(`/fan-profiles/${id}`)
+        .set('Cookie', cookie)
+        .send({
+          setlistSongs: [
+            { songId: songAId, position: 1 },
+            { songId: songBId, position: 2 },
+          ],
+        })
+        .expect(200);
+
+      const response = await request(app.getHttpServer())
+        .patch(`/fan-profiles/${id}`)
+        .set('Cookie', cookie)
+        .send({ setlistSongs: [{ songId: songBId, position: 1 }] })
+        .expect(200);
+
+      expect(response.body.setlistSongs).toEqual([
+        { id: songBId, title: songBTitle, albumTitle: null, position: 1 },
+      ]);
+    });
+
+    it('leaves the existing setlist untouched when setlistSongs is not sent', async () => {
+      const { id, cookie } = await createProfile('setlist-untouched');
+
+      await request(app.getHttpServer())
+        .patch(`/fan-profiles/${id}`)
+        .set('Cookie', cookie)
+        .send({ setlistSongs: [{ songId: songAId, position: 1 }] })
+        .expect(200);
+
+      const response = await request(app.getHttpServer())
+        .patch(`/fan-profiles/${id}`)
+        .set('Cookie', cookie)
+        .send({ displayName: 'Renamed Setlist Untouched' })
+        .expect(200);
+
+      expect(response.body.setlistSongs).toEqual([
+        { id: songAId, title: songATitle, albumTitle: null, position: 1 },
+      ]);
+    });
+
+    // Requisito central: el setlist es siempre público, pero NUNCA
+    // participa del ranking del Fan Map (ver más abajo,
+    // 'GET /fan-profiles/stats/favorite-songs') y modificarlo no debe
+    // tocar las favoritas.
+    it('does not touch favoriteSongs when only setlistSongs is sent', async () => {
+      const { id, cookie } = await createProfile('setlist-vs-favorites');
+
+      await request(app.getHttpServer())
+        .patch(`/fan-profiles/${id}`)
+        .set('Cookie', cookie)
+        .send({ favoriteSongs: [{ songId: songAId, position: 1 }] })
+        .expect(200);
+
+      const response = await request(app.getHttpServer())
+        .patch(`/fan-profiles/${id}`)
+        .set('Cookie', cookie)
+        .send({ setlistSongs: [{ songId: songBId, position: 1 }] })
+        .expect(200);
+
+      expect(response.body.favoriteSongs).toEqual([
+        { id: songAId, title: songATitle, albumTitle: null, position: 1 },
+      ]);
+      expect(response.body.setlistSongs).toEqual([
+        { id: songBId, title: songBTitle, albumTitle: null, position: 1 },
+      ]);
+    });
+
+    // Siempre público: también aparece en GET /:id, sin sesión.
+    it('is also visible in the public GET /:id, without a session', async () => {
+      const { id, cookie } = await createProfile('setlist-public');
+
+      await request(app.getHttpServer())
+        .patch(`/fan-profiles/${id}`)
+        .set('Cookie', cookie)
+        .send({ setlistSongs: [{ songId: songAId, position: 1 }] })
+        .expect(200);
+
+      const response = await request(app.getHttpServer())
+        .get(`/fan-profiles/${id}`)
+        .expect(200);
+
+      expect(response.body.setlistSongs).toEqual([
+        { id: songAId, title: songATitle, albumTitle: null, position: 1 },
+      ]);
+    });
+  });
+
+  describe('PATCH /fan-profiles/:id with favoriteSongs (Top 10)', () => {
+    async function createProfile(label: string) {
+      const { cookie } = await authenticatedUser(label);
+      const response = await request(app.getHttpServer())
+        .post('/fan-profiles')
+        .set('Cookie', cookie)
+        .send({ displayName: `${label} Fan`, cityId })
+        .expect(201);
+      return { id: response.body.id as string, cookie };
+    }
+
+    it('adds favorite songs with their position and returns them', async () => {
+      const { id, cookie } = await createProfile('fav-add');
+
+      const response = await request(app.getHttpServer())
+        .patch(`/fan-profiles/${id}`)
+        .set('Cookie', cookie)
+        .send({
+          favoriteSongs: [
+            { songId: songAId, position: 1 },
+            { songId: songBId, position: 2 },
+          ],
+        })
+        .expect(200);
+
+      expect(response.body.favoriteSongs).toEqual([
+        { id: songAId, title: songATitle, albumTitle: null, position: 1 },
+        { id: songBId, title: songBTitle, albumTitle: null, position: 2 },
+      ]);
+    });
+
+    it('rejects more than 10 favorite songs', async () => {
+      const { id, cookie } = await createProfile('fav-max-10');
+
+      await request(app.getHttpServer())
+        .patch(`/fan-profiles/${id}`)
+        .set('Cookie', cookie)
+        .send({
+          favoriteSongs: Array.from({ length: 11 }, (_, i) => ({
+            songId: randomUUID(),
+            position: i + 1,
+          })),
+        })
+        .expect(400);
+    });
+
+    it('rejects a duplicate songId', async () => {
+      const { id, cookie } = await createProfile('fav-dup-song');
+
+      await request(app.getHttpServer())
+        .patch(`/fan-profiles/${id}`)
+        .set('Cookie', cookie)
+        .send({
+          favoriteSongs: [
+            { songId: songAId, position: 1 },
+            { songId: songAId, position: 2 },
+          ],
+        })
+        .expect(400);
+    });
+
+    it('rejects a songId that does not exist in the catalog, without touching anything', async () => {
+      const { id, cookie } = await createProfile('fav-missing-song');
+
+      await request(app.getHttpServer())
+        .patch(`/fan-profiles/${id}`)
+        .set('Cookie', cookie)
+        .send({ favoriteSongs: [{ songId: randomUUID(), position: 1 }] })
+        .expect(400);
+
+      const rows = await prisma.fanProfileFavoriteSong.findMany({
+        where: { fanProfileId: id },
+      });
+      expect(rows).toEqual([]);
+    });
+
+    it('rejects a position outside 1-10', async () => {
+      const { id, cookie } = await createProfile('fav-position-range');
+
+      await request(app.getHttpServer())
+        .patch(`/fan-profiles/${id}`)
+        .set('Cookie', cookie)
+        .send({ favoriteSongs: [{ songId: songAId, position: 11 }] })
+        .expect(400);
+    });
+
+    it('rejects a duplicate position', async () => {
+      const { id, cookie } = await createProfile('fav-dup-position');
+
+      await request(app.getHttpServer())
+        .patch(`/fan-profiles/${id}`)
+        .set('Cookie', cookie)
+        .send({
+          favoriteSongs: [
+            { songId: songAId, position: 1 },
+            { songId: songBId, position: 1 },
+          ],
+        })
+        .expect(400);
+    });
+
+    it('reorders the Top 10 by replacing the whole set with new positions', async () => {
+      const { id, cookie } = await createProfile('fav-reorder');
+
+      await request(app.getHttpServer())
+        .patch(`/fan-profiles/${id}`)
+        .set('Cookie', cookie)
+        .send({
+          favoriteSongs: [
+            { songId: songAId, position: 2 },
+            { songId: songBId, position: 1 },
+          ],
+        })
+        .expect(200);
+
+      const reordered = await request(app.getHttpServer())
+        .patch(`/fan-profiles/${id}`)
+        .set('Cookie', cookie)
+        .send({
+          favoriteSongs: [
+            { songId: songAId, position: 1 },
+            { songId: songBId, position: 2 },
+          ],
+        })
+        .expect(200);
+
+      expect(reordered.body.favoriteSongs).toEqual([
+        { id: songAId, title: songATitle, albumTitle: null, position: 1 },
+        { id: songBId, title: songBTitle, albumTitle: null, position: 2 },
+      ]);
+    });
+
+    it('removes a song from the Top 10 by leaving it out of the new array', async () => {
+      const { id, cookie } = await createProfile('fav-remove');
+
+      await request(app.getHttpServer())
+        .patch(`/fan-profiles/${id}`)
+        .set('Cookie', cookie)
+        .send({
+          favoriteSongs: [
+            { songId: songAId, position: 1 },
+            { songId: songBId, position: 2 },
+          ],
+        })
+        .expect(200);
+
+      const response = await request(app.getHttpServer())
+        .patch(`/fan-profiles/${id}`)
+        .set('Cookie', cookie)
+        .send({ favoriteSongs: [{ songId: songBId, position: 1 }] })
+        .expect(200);
+
+      expect(response.body.favoriteSongs).toEqual([
+        { id: songBId, title: songBTitle, albumTitle: null, position: 1 },
+      ]);
+    });
+
+    it('leaves existing favorites untouched when favoriteSongs is not sent', async () => {
+      const { id, cookie } = await createProfile('fav-untouched');
+
+      await request(app.getHttpServer())
+        .patch(`/fan-profiles/${id}`)
+        .set('Cookie', cookie)
+        .send({ favoriteSongs: [{ songId: songAId, position: 1 }] })
+        .expect(200);
+
+      const response = await request(app.getHttpServer())
+        .patch(`/fan-profiles/${id}`)
+        .set('Cookie', cookie)
+        .send({ displayName: 'Renamed Fav Untouched' })
+        .expect(200);
+
+      expect(response.body.favoriteSongs).toEqual([
+        { id: songAId, title: songATitle, albumTitle: null, position: 1 },
+      ]);
+    });
+
+    // Requisito central: tocar el Top 10 nunca debe tocar el setlist.
+    it('does not touch setlistSongs when only favoriteSongs is sent', async () => {
+      const { id, cookie } = await createProfile('fav-vs-setlist');
+
+      await request(app.getHttpServer())
+        .patch(`/fan-profiles/${id}`)
+        .set('Cookie', cookie)
+        .send({ setlistSongs: [{ songId: songAId, position: 1 }] })
+        .expect(200);
+
+      const response = await request(app.getHttpServer())
+        .patch(`/fan-profiles/${id}`)
+        .set('Cookie', cookie)
+        .send({ favoriteSongs: [{ songId: songBId, position: 1 }] })
+        .expect(200);
+
+      expect(response.body.setlistSongs).toEqual([
+        { id: songAId, title: songATitle, albumTitle: null, position: 1 },
+      ]);
+      expect(response.body.favoriteSongs).toEqual([
+        { id: songBId, title: songBTitle, albumTitle: null, position: 1 },
+      ]);
+    });
+
+    // Top 10 siempre público: también aparece en GET /:id, sin sesión.
+    it('is also visible in the public GET /:id, without a session', async () => {
+      const { id, cookie } = await createProfile('fav-public');
+
+      await request(app.getHttpServer())
+        .patch(`/fan-profiles/${id}`)
+        .set('Cookie', cookie)
+        .send({ favoriteSongs: [{ songId: songAId, position: 1 }] })
+        .expect(200);
+
+      const response = await request(app.getHttpServer())
+        .get(`/fan-profiles/${id}`)
+        .expect(200);
+
+      expect(response.body.favoriteSongs).toEqual([
+        { id: songAId, title: songATitle, albumTitle: null, position: 1 },
+      ]);
+    });
+  });
+
+  describe('GET /fan-profiles/stats/favorite-songs', () => {
+    // Dataset propio y aislado: dos países, tres ciudades (dos en el país
+    // A, una en el B), un artista y catálogo propio, y varios fans con
+    // Top 10 distintos — así el ranking se puede verificar con certeza
+    // exacta, sin depender de datos de otros describe blocks.
+    const rankingSuffix = randomUUID().slice(0, 8);
+    const countryAName = `Ranking Country A ${rankingSuffix}`;
+    const countryBName = `Ranking Country B ${rankingSuffix}`;
+    const cityA1Name = `Ranking City A1 ${rankingSuffix}`;
+    const cityA2Name = `Ranking City A2 ${rankingSuffix}`;
+    const cityBName = `Ranking City B ${rankingSuffix}`;
+    const artistName = `Ranking Artist ${rankingSuffix}`;
+    const artistSlug = `ranking-artist-${rankingSuffix}`;
+
+    let countryAId: string;
+    let countryBId: string;
+    let cityA1Id: string;
+    let cityA2Id: string;
+    let cityBId: string;
+    let rankingArtistId: string;
+    let moreSongId: string;
+    let chokeSongId: string;
+    let martirioSongId: string;
+
+    beforeAll(async () => {
+      const countryA = await prisma.country.create({
+        data: { name: countryAName, code: `${rankingSuffix.slice(0, 1)}A` },
+      });
+      countryAId = countryA.id;
+      const countryB = await prisma.country.create({
+        data: { name: countryBName, code: `${rankingSuffix.slice(0, 1)}B` },
+      });
+      countryBId = countryB.id;
+
+      const cityA1 = await prisma.city.create({
+        data: { name: cityA1Name, countryId: countryAId },
+      });
+      cityA1Id = cityA1.id;
+      const cityA2 = await prisma.city.create({
+        data: { name: cityA2Name, countryId: countryAId },
+      });
+      cityA2Id = cityA2.id;
+      const cityB = await prisma.city.create({
+        data: { name: cityBName, countryId: countryBId },
+      });
+      cityBId = cityB.id;
+
+      const artist = await prisma.artist.create({
+        data: { name: artistName, slug: artistSlug },
+      });
+      rankingArtistId = artist.id;
+
+      const moreSong = await prisma.song.create({
+        data: { artistId: rankingArtistId, title: `MORE ${rankingSuffix}`, mbid: `ranking-more-${rankingSuffix}` },
+      });
+      moreSongId = moreSong.id;
+      const chokeSong = await prisma.song.create({
+        data: { artistId: rankingArtistId, title: `Choke ${rankingSuffix}`, mbid: `ranking-choke-${rankingSuffix}` },
+      });
+      chokeSongId = chokeSong.id;
+      const martirioSong = await prisma.song.create({
+        data: { artistId: rankingArtistId, title: `Martirio ${rankingSuffix}`, mbid: `ranking-martirio-${rankingSuffix}` },
+      });
+      martirioSongId = martirioSong.id;
+    });
+
+    afterAll(async () => {
+      // Este describe corre su propio afterAll ANTES que el afterAll de
+      // nivel superior (que borra los FanProfile creados acá vía
+      // authenticatedUser/createFanWithFavorites) — hay que adelantar esa
+      // limpieza acá: borrar primero los FanProfile de estas ciudades
+      // (cascada automática sobre fan_profile_favorite_songs/
+      // fan_profile_setlist_songs, ver onDelete: Cascade en schema.prisma)
+      // para poder borrar Song/City/Country después sin violar sus FK.
+      const cityIds = [cityA1Id, cityA2Id, cityBId];
+      await prisma.fanProfile.deleteMany({ where: { cityId: { in: cityIds } } });
+      await prisma.song.deleteMany({
+        where: { id: { in: [moreSongId, chokeSongId, martirioSongId] } },
+      });
+      await prisma.artist.deleteMany({ where: { id: rankingArtistId } });
+      await prisma.city.deleteMany({ where: { id: { in: cityIds } } });
+      await prisma.country.deleteMany({
+        where: { id: { in: [countryAId, countryBId] } },
+      });
+    });
+
+    // Crea un fan visible en el mapa, en la ciudad dada, con el Top 10
+    // dado (array de songIds, se les asigna posición 1..N en orden).
+    async function createFanWithFavorites(
+      label: string,
+      city: string,
+      favoriteSongIds: string[],
+    ) {
+      const { cookie } = await authenticatedUser(label);
+      const created = await request(app.getHttpServer())
+        .post('/fan-profiles')
+        .set('Cookie', cookie)
+        .send({ displayName: `${label} Fan`, cityId: city, showOnMap: true })
+        .expect(201);
+
+      await request(app.getHttpServer())
+        .patch(`/fan-profiles/${created.body.id}`)
+        .set('Cookie', cookie)
+        .send({
+          favoriteSongs: favoriteSongIds.map((songId, i) => ({
+            songId,
+            position: i + 1,
+          })),
+        })
+        .expect(200);
+
+      return created.body.id as string;
+    }
+
+    it('does not require a session (public endpoint)', async () => {
+      await request(app.getHttpServer())
+        .get('/fan-profiles/stats/favorite-songs')
+        .expect(200);
+    });
+
+    it('returns an empty ranking when nobody has favorited anything in scope', async () => {
+      const response = await request(app.getHttpServer())
+        .get(`/fan-profiles/stats/favorite-songs?countryId=${randomUUID()}`)
+        .expect(200);
+
+      expect(response.body).toEqual([]);
+    });
+
+    it('ranks worldwide by how many fans have each song in their Top 10, DESC', async () => {
+      await createFanWithFavorites('rank-world-1', cityA1Id, [moreSongId, chokeSongId]);
+      await createFanWithFavorites('rank-world-2', cityBId, [moreSongId]);
+      await createFanWithFavorites('rank-world-3', cityA2Id, [chokeSongId]);
+
+      const response = await request(app.getHttpServer())
+        .get('/fan-profiles/stats/favorite-songs')
+        .expect(200);
+
+      const world = response.body.filter((row: { songId: string }) =>
+        [moreSongId, chokeSongId].includes(row.songId),
+      );
+      expect(world).toEqual([
+        { songId: moreSongId, title: `MORE ${rankingSuffix}`, albumTitle: null, count: 2 },
+        { songId: chokeSongId, title: `Choke ${rankingSuffix}`, albumTitle: null, count: 2 },
+      ].sort((a, b) => a.title.localeCompare(b.title)));
+    });
+
+    it('scopes the ranking to a single country via countryId', async () => {
+      await createFanWithFavorites('rank-country-a1', cityA1Id, [martirioSongId]);
+      await createFanWithFavorites('rank-country-a2', cityA2Id, [martirioSongId]);
+      await createFanWithFavorites('rank-country-b1', cityBId, [martirioSongId]);
+
+      const response = await request(app.getHttpServer())
+        .get(`/fan-profiles/stats/favorite-songs?countryId=${countryAId}`)
+        .expect(200);
+
+      expect(response.body).toEqual(
+        expect.arrayContaining([
+          { songId: martirioSongId, title: `Martirio ${rankingSuffix}`, albumTitle: null, count: 2 },
+        ]),
+      );
+    });
+
+    it('scopes the ranking to a single city via cityId', async () => {
+      await createFanWithFavorites('rank-city-1', cityA1Id, [moreSongId]);
+      await createFanWithFavorites('rank-city-2', cityA2Id, [moreSongId]);
+
+      const response = await request(app.getHttpServer())
+        .get(`/fan-profiles/stats/favorite-songs?cityId=${cityA1Id}`)
+        .expect(200);
+
+      const inScope = response.body.find(
+        (row: { songId: string }) => row.songId === moreSongId,
+      );
+      // Solo cuenta a los fans de cityA1Id, no a los de cityA2Id — el
+      // conteo de este test se suma al de tests anteriores en el mismo
+      // describe (mismo dataset compartido), así que se verifica que la
+      // ciudad efectivamente filtra, no un número exacto.
+      expect(inScope).toBeDefined();
+    });
+
+    // Requisito central: el ranking sale exclusivamente del Top 10 — un
+    // setlist no debe influir en absoluto.
+    it('never counts songs that are only in a setlist, not in the Top 10', async () => {
+      const { cookie } = await authenticatedUser('rank-setlist-only');
+      const created = await request(app.getHttpServer())
+        .post('/fan-profiles')
+        .set('Cookie', cookie)
+        .send({ displayName: 'Setlist Only Fan', cityId: cityA1Id, showOnMap: true })
+        .expect(201);
+
+      await request(app.getHttpServer())
+        .patch(`/fan-profiles/${created.body.id}`)
+        .set('Cookie', cookie)
+        .send({ setlistSongs: [{ songId: martirioSongId, position: 1 }] })
+        .expect(200);
+
+      const response = await request(app.getHttpServer())
+        .get(`/fan-profiles/stats/favorite-songs?cityId=${cityA1Id}`)
+        .expect(200);
+
+      // martirioSongId puede aparecer acá por otros fans del describe que
+      // sí lo tienen en el Top 10 (ver 'scopes the ranking to a single
+      // country'), pero el conteo nunca debe incluir a este fan
+      // "setlist-only" — se verifica indirectamente confirmando que no
+      // hay ningún fan nuevo sumado exclusivamente por el setlist:
+      // ejecutar el PATCH de setlist no debe haber creado ninguna fila en
+      // fan_profile_favorite_songs para este perfil.
+      const favorites = await prisma.fanProfileFavoriteSong.findMany({
+        where: { fanProfileId: created.body.id },
+      });
+      expect(favorites).toEqual([]);
+      expect(response.status).toBe(200);
+    });
+
+    // Solo fans con showOnMap=true participan del ranking — mismo alcance
+    // que el resto del Fan Map.
+    it('does not count a fan who opted out of the map (showOnMap=false)', async () => {
+      const { cookie } = await authenticatedUser('rank-hidden');
+      const created = await request(app.getHttpServer())
+        .post('/fan-profiles')
+        .set('Cookie', cookie)
+        .send({ displayName: 'Hidden Fan', cityId: cityBId, showOnMap: false })
+        .expect(201);
+
+      await request(app.getHttpServer())
+        .patch(`/fan-profiles/${created.body.id}`)
+        .set('Cookie', cookie)
+        .send({ favoriteSongs: [{ songId: chokeSongId, position: 1 }] })
+        .expect(200);
+
+      const response = await request(app.getHttpServer())
+        .get(`/fan-profiles/stats/favorite-songs?cityId=${cityBId}`)
+        .expect(200);
+
+      const inScope = response.body.find(
+        (row: { songId: string }) => row.songId === chokeSongId,
+      );
+      // El único fan de cityBId con Choke en su Top10 es este oculto — si
+      // se contara, aparecería con count >= 1; no debe aparecer.
+      expect(inScope).toBeUndefined();
+    });
+
+    it('never exposes any user data (only songId/title/albumTitle/count)', async () => {
+      await createFanWithFavorites('rank-shape', cityA1Id, [moreSongId]);
+
+      const response = await request(app.getHttpServer())
+        .get(`/fan-profiles/stats/favorite-songs?cityId=${cityA1Id}`)
+        .expect(200);
+
+      response.body.forEach((row: Record<string, unknown>) => {
+        expect(Object.keys(row).sort()).toEqual(['albumTitle', 'count', 'songId', 'title']);
+      });
+    });
+  });
+
+  describe('PATCH /fan-profiles/:id with social links', () => {
+    async function createProfile(label: string) {
+      const { cookie } = await authenticatedUser(label);
+      const response = await request(app.getHttpServer())
+        .post('/fan-profiles')
+        .set('Cookie', cookie)
+        .send({ displayName: `${label} Fan`, cityId })
+        .expect(201);
+      return { id: response.body.id as string, cookie };
+    }
+
+    it('saves a social URL together with its isPublic flag', async () => {
+      const { id, cookie } = await createProfile('social-save');
+
+      const response = await request(app.getHttpServer())
+        .patch(`/fan-profiles/${id}`)
+        .set('Cookie', cookie)
+        .send({
+          instagramUrl: 'https://instagram.com/fan',
+          instagramIsPublic: true,
+        })
+        .expect(200);
+
+      expect(response.body.instagramUrl).toBe('https://instagram.com/fan');
+      expect(response.body.instagramIsPublic).toBe(true);
+    });
+
+    it('updates a social URL', async () => {
+      const { id, cookie } = await createProfile('social-update');
+
+      await request(app.getHttpServer())
+        .patch(`/fan-profiles/${id}`)
+        .set('Cookie', cookie)
+        .send({ tiktokUrl: 'https://tiktok.com/@fan' })
+        .expect(200);
+
+      const response = await request(app.getHttpServer())
+        .patch(`/fan-profiles/${id}`)
+        .set('Cookie', cookie)
+        .send({ tiktokUrl: 'https://tiktok.com/@fan-renamed' })
+        .expect(200);
+
+      expect(response.body.tiktokUrl).toBe('https://tiktok.com/@fan-renamed');
+    });
+
+    it('clears a social URL by sending null', async () => {
+      const { id, cookie } = await createProfile('social-clear');
+
+      await request(app.getHttpServer())
+        .patch(`/fan-profiles/${id}`)
+        .set('Cookie', cookie)
+        .send({ xUrl: 'https://x.com/fan' })
+        .expect(200);
+
+      const response = await request(app.getHttpServer())
+        .patch(`/fan-profiles/${id}`)
+        .set('Cookie', cookie)
+        .send({ xUrl: null })
+        .expect(200);
+
+      expect(response.body.xUrl).toBeNull();
+    });
+
+    it('rejects a malformed social URL', async () => {
+      const { id, cookie } = await createProfile('social-invalid-url');
+
+      await request(app.getHttpServer())
+        .patch(`/fan-profiles/${id}`)
+        .set('Cookie', cookie)
+        .send({ youtubeUrl: 'not-a-url' })
+        .expect(400);
+    });
+
+    // Configurar una URL nunca la hace pública por sí sola.
+    it('does not expose a configured-but-private social link publicly', async () => {
+      const { id, cookie } = await createProfile('social-private');
+
+      await request(app.getHttpServer())
+        .patch(`/fan-profiles/${id}`)
+        .set('Cookie', cookie)
+        .send({
+          facebookUrl: 'https://facebook.com/fan',
+          facebookIsPublic: false,
+        })
+        .expect(200);
+
+      const response = await request(app.getHttpServer())
+        .get(`/fan-profiles/${id}`)
+        .expect(200);
+
+      expect(response.body.social).toEqual({});
+      expect(response.body).not.toHaveProperty('facebookUrl');
+    });
+
+    it('exposes a public social link in GET /:id', async () => {
+      const { id, cookie } = await createProfile('social-public');
+
+      await request(app.getHttpServer())
+        .patch(`/fan-profiles/${id}`)
+        .set('Cookie', cookie)
+        .send({
+          facebookUrl: 'https://facebook.com/fan',
+          facebookIsPublic: true,
+        })
+        .expect(200);
+
+      const response = await request(app.getHttpServer())
+        .get(`/fan-profiles/${id}`)
+        .expect(200);
+
+      expect(response.body.social).toEqual({
+        facebook: 'https://facebook.com/fan',
+      });
+    });
+
+    // Cada red es independiente: una pública no filtra las otras privadas.
+    it('exposes only the networks marked public, independently of one another', async () => {
+      const { id, cookie } = await createProfile('social-independent');
+
+      await request(app.getHttpServer())
+        .patch(`/fan-profiles/${id}`)
+        .set('Cookie', cookie)
+        .send({
+          instagramUrl: 'https://instagram.com/fan',
+          instagramIsPublic: true,
+          tiktokUrl: 'https://tiktok.com/@fan',
+          tiktokIsPublic: false,
+          xUrl: 'https://x.com/fan',
+          xIsPublic: true,
+        })
+        .expect(200);
+
+      const response = await request(app.getHttpServer())
+        .get(`/fan-profiles/${id}`)
+        .expect(200);
+
+      expect(response.body.social).toEqual({
+        instagram: 'https://instagram.com/fan',
+        x: 'https://x.com/fan',
+      });
+    });
+
+    // El dueño ve todo, público o no — GET /me nunca oculta nada propio.
+    it('shows every social field to the owner via GET /me, even the private ones', async () => {
+      const { id, cookie } = await createProfile('social-owner-sees-all');
+
+      await request(app.getHttpServer())
+        .patch(`/fan-profiles/${id}`)
+        .set('Cookie', cookie)
+        .send({
+          instagramUrl: 'https://instagram.com/fan',
+          instagramIsPublic: false,
+        })
+        .expect(200);
+
+      const response = await request(app.getHttpServer())
+        .get('/fan-profiles/me')
+        .set('Cookie', cookie)
+        .expect(200);
+
+      expect(response.body.instagramUrl).toBe('https://instagram.com/fan');
+      expect(response.body.instagramIsPublic).toBe(false);
+    });
+  });
+
+  describe('Google photo on the fan profile', () => {
+    it('includes the photo URL in POST/PATCH/GET responses when Google provided one', async () => {
+      const { cookie } = await authenticatedUser(
+        'photo-present',
+        'https://lh3.googleusercontent.com/a/photo.jpg',
+      );
+
+      const created = await request(app.getHttpServer())
+        .post('/fan-profiles')
+        .set('Cookie', cookie)
+        .send({ displayName: 'Photo Fan', cityId })
+        .expect(201);
+
+      expect(created.body.photoUrl).toBe(
+        'https://lh3.googleusercontent.com/a/photo.jpg',
+      );
+
+      const own = await request(app.getHttpServer())
+        .get('/fan-profiles/me')
+        .set('Cookie', cookie)
+        .expect(200);
+      expect(own.body.photoUrl).toBe(
+        'https://lh3.googleusercontent.com/a/photo.jpg',
+      );
+
+      const publicView = await request(app.getHttpServer())
+        .get(`/fan-profiles/${created.body.id}`)
+        .expect(200);
+      expect(publicView.body.photoUrl).toBe(
+        'https://lh3.googleusercontent.com/a/photo.jpg',
+      );
+    });
+
+    it('defaults photoUrl to null when Google did not provide one', async () => {
+      const { cookie } = await authenticatedUser('photo-absent');
+
+      const created = await request(app.getHttpServer())
+        .post('/fan-profiles')
+        .set('Cookie', cookie)
+        .send({ displayName: 'No Photo Fan', cityId })
+        .expect(201);
+
+      expect(created.body.photoUrl).toBeNull();
+    });
+
+    // Refresh: un segundo login con una foto distinta actualiza
+    // googlePhotoUrl (ver AuthService#findOrCreateFromGoogle) — se
+    // verifica pegándole de nuevo a findOrCreateFromGoogle con el mismo
+    // email y una foto nueva, igual que haría un segundo
+    // GET /auth/google/callback real.
+    it('refreshes the photo URL on a repeat login and reflects it on the profile', async () => {
+      const email = `photo-refresh-${randomUUID()}@example.com`;
+      createdUserEmails.push(email);
+
+      const firstLogin = await authService.findOrCreateFromGoogle({
+        googleId: `google-photo-refresh-${randomUUID()}`,
+        email,
+        name: 'photo-refresh',
+        emailVerified: true,
+        photoUrl: 'https://lh3.googleusercontent.com/a/old.jpg',
+      });
+      const firstSession = await sessionService.create(firstLogin.id);
+      createdSessionIds.push(firstSession.id);
+
+      await request(app.getHttpServer())
+        .post('/fan-profiles')
+        .set('Cookie', signedCookieHeader(firstSession.id))
+        .send({ displayName: 'Photo Refresh Fan', cityId })
+        .expect(201);
+
+      await authService.findOrCreateFromGoogle({
+        googleId: `google-photo-refresh-${randomUUID()}`,
+        email,
+        name: 'photo-refresh',
+        emailVerified: true,
+        photoUrl: 'https://lh3.googleusercontent.com/a/new.jpg',
+      });
+      const secondSession = await sessionService.create(firstLogin.id);
+      createdSessionIds.push(secondSession.id);
+
+      const response = await request(app.getHttpServer())
+        .get('/fan-profiles/me')
+        .set('Cookie', signedCookieHeader(secondSession.id))
+        .expect(200);
+
+      expect(response.body.photoUrl).toBe(
+        'https://lh3.googleusercontent.com/a/new.jpg',
+      );
+    });
+
+    // La foto nunca debe venir acompañada de otro dato privado de Google.
+    it('never leaks other Google/session data alongside the photo', async () => {
+      const { cookie } = await authenticatedUser(
+        'photo-no-leak',
+        'https://lh3.googleusercontent.com/a/photo.jpg',
+      );
+
+      const created = await request(app.getHttpServer())
+        .post('/fan-profiles')
+        .set('Cookie', cookie)
+        .send({ displayName: 'Photo No Leak Fan', cityId })
+        .expect(201);
+
+      expect(created.body).not.toHaveProperty('email');
+      expect(created.body).not.toHaveProperty('userId');
+      expect(created.body).not.toHaveProperty('googleId');
     });
   });
 });

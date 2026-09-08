@@ -37,6 +37,10 @@ const { getTheWarningTopSongsData } = vi.hoisted(() => ({
 const { getArtists } = vi.hoisted(() => ({
   getArtists: vi.fn(),
 }));
+// JoinOrProfileLink (el CTA "Join the FanMap"/"Profile" del header) usa
+// useAuth() — se mockea acá igual que en join-flow.test.tsx, nunca se
+// prueba la lógica de auth-provider en sí misma desde acá.
+const { useAuth } = vi.hoisted(() => ({ useAuth: vi.fn() }));
 
 vi.mock("@/lib/the-warning-fan-map", () => ({ getTheWarningMapData }));
 vi.mock("@/lib/the-warning-shows", () => ({ getTheWarningShowsData }));
@@ -46,6 +50,7 @@ vi.mock("@/lib/api", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/api")>();
   return { ...actual, getArtists };
 });
+vi.mock("@/components/auth/auth-provider", () => ({ useAuth }));
 
 // Etapa G: el cuerpo del mapa ya no es FanMapLoader ni un <ShowsList>
 // aparte — es TourExplorer (el mismo que /artists/the-warning/tour y la
@@ -179,6 +184,8 @@ describe("TheWarningArtistPage", () => {
     getTheWarningShowsData.mockReset();
     getTheWarningStatsData.mockReset();
     getTheWarningTopSongsData.mockReset();
+    useAuth.mockReset();
+    useAuth.mockReturnValue({ status: "unauthenticated", user: null, logout: vi.fn() });
   });
 
   it("fetches GET /artists once and shares it with getTheWarningMapData, getTheWarningShowsData, getTheWarningStatsData and getTheWarningTopSongsData (not a hardcoded id)", async () => {
@@ -449,11 +456,26 @@ describe("TheWarningArtistPage", () => {
     expect(screen.getByTestId("tour-explorer")).toBeInTheDocument();
   });
 
-  it("renders a working CTA linking to /join", async () => {
+  it("renders a working CTA linking to /join when not authenticated", async () => {
     await renderPage({ status: "ok", artist: makeArtist(), fans: [] });
 
     const cta = screen.getByRole("link", { name: /join the fanmap/i });
     expect(cta).toHaveAttribute("href", "/join");
+  });
+
+  // Pedido: logueado, el CTA cambia de "Join the FanMap" a "Profile".
+  it("renders a CTA linking to /profile instead of /join when authenticated", async () => {
+    useAuth.mockReturnValue({
+      status: "authenticated",
+      user: { id: "user-1", email: "fan@example.com" },
+      logout: vi.fn(),
+    });
+
+    await renderPage({ status: "ok", artist: makeArtist(), fans: [] });
+
+    const cta = screen.getByRole("link", { name: /^profile$/i });
+    expect(cta).toHaveAttribute("href", "/profile");
+    expect(screen.queryByRole("link", { name: /join the fanmap/i })).not.toBeInTheDocument();
   });
 
   it("renders a working CTA linking to the show history", async () => {
