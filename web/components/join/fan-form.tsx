@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, type FormEvent } from "react";
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   createFanProfile,
   getArtists,
@@ -25,6 +25,7 @@ interface FormErrors {
 }
 
 export function FanForm() {
+  const router = useRouter();
   const [loadStatus, setLoadStatus] = useState<LoadStatus>("loading");
   const [countries, setCountries] = useState<Country[]>([]);
   const [artists, setArtists] = useState<Artist[]>([]);
@@ -95,6 +96,16 @@ export function FanForm() {
       });
   }
 
+  // Cambio de navegabilidad: primer ingreso → perfil creado → /profile
+  // directo, sin pantalla intermedia con link al mapa. Desde /profile la
+  // persona sale al fan map (con o sin cambios de setlist/favoritas) — ver
+  // el botón "Ir al mapa" en ProfileEditor.
+  useEffect(() => {
+    if (submitStatus === "success") {
+      router.replace("/profile");
+    }
+  }, [submitStatus, router]);
+
   function toggleArtist(artistId: string) {
     setSelectedArtistIds((prev) =>
       prev.includes(artistId)
@@ -163,11 +174,8 @@ export function FanForm() {
       <div className="flex flex-col gap-3 rounded-lg border border-zinc-200 p-6 dark:border-zinc-800">
         <h2 className="text-lg font-semibold">¡Listo!</h2>
         <p className="text-zinc-600 dark:text-zinc-400">
-          Tu perfil se creó correctamente.
+          Tu perfil se creó correctamente. Te llevamos a tu perfil...
         </p>
-        <Link href="/map?view=fans" className="font-medium underline underline-offset-2">
-          Ver el mapa
-        </Link>
       </div>
     );
   }

@@ -3,14 +3,14 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import { fireEvent } from "@testing-library/react";
 import type { Artist, Country } from "@/lib/api";
 
-const { getCountries, getCities, getArtists, createFanProfile } = vi.hoisted(
-  () => ({
+const { getCountries, getCities, getArtists, createFanProfile, useRouter } =
+  vi.hoisted(() => ({
     getCountries: vi.fn(),
     getCities: vi.fn(),
     getArtists: vi.fn(),
     createFanProfile: vi.fn(),
-  }),
-);
+    useRouter: vi.fn(),
+  }));
 
 vi.mock("@/lib/api", () => ({
   getCountries,
@@ -18,6 +18,8 @@ vi.mock("@/lib/api", () => ({
   getArtists,
   createFanProfile,
 }));
+
+vi.mock("next/navigation", () => ({ useRouter }));
 
 const { FanForm } = await import("./fan-form");
 
@@ -87,6 +89,8 @@ beforeEach(() => {
     return Promise.resolve([]);
   });
   createFanProfile.mockReset();
+  useRouter.mockReset();
+  useRouter.mockReturnValue({ replace: vi.fn(), push: vi.fn() });
 });
 
 describe("FanForm", () => {
@@ -346,7 +350,10 @@ describe("FanForm", () => {
     expect(screen.getByText(/already has a fan profile/i)).toBeInTheDocument();
   });
 
-  it("shows a success confirmation after a successful POST, without exposing any userId", async () => {
+  it("shows a success confirmation and redirects to /profile after a successful POST, without exposing any userId", async () => {
+    const replace = vi.fn();
+    useRouter.mockReturnValue({ replace, push: vi.fn() });
+
     createFanProfile.mockResolvedValue({
       id: "profile-1",
       displayName: "Ana Fan",
@@ -366,8 +373,7 @@ describe("FanForm", () => {
     expect(
       await screen.findByText(/tu perfil se creó correctamente/i),
     ).toBeInTheDocument();
-    const mapLink = screen.getByRole("link", { name: /ver el mapa/i });
-    expect(mapLink).toHaveAttribute("href", "/map?view=fans");
+    await waitFor(() => expect(replace).toHaveBeenCalledWith("/profile"));
     expect(screen.queryByText(/userId/i)).not.toBeInTheDocument();
     expect(screen.queryByText("profile-1")).not.toBeInTheDocument();
   });

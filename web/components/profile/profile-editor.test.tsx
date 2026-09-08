@@ -9,6 +9,7 @@ const {
   getArtistSongs,
   getMyFanProfile,
   updateFanProfile,
+  useRouter,
 } = vi.hoisted(() => ({
   getCountries: vi.fn(),
   getCities: vi.fn(),
@@ -16,6 +17,7 @@ const {
   getArtistSongs: vi.fn(),
   getMyFanProfile: vi.fn(),
   updateFanProfile: vi.fn(),
+  useRouter: vi.fn(),
 }));
 
 vi.mock("@/lib/api", () => ({
@@ -26,6 +28,8 @@ vi.mock("@/lib/api", () => ({
   getMyFanProfile,
   updateFanProfile,
 }));
+
+vi.mock("next/navigation", () => ({ useRouter }));
 
 const { ProfileEditor } = await import("./profile-editor");
 
@@ -94,6 +98,8 @@ beforeEach(() => {
   getArtistSongs.mockReset().mockResolvedValue([songA, songB]);
   getMyFanProfile.mockReset();
   updateFanProfile.mockReset();
+  useRouter.mockReset();
+  useRouter.mockReturnValue({ replace: vi.fn(), push: vi.fn() });
 });
 
 async function renderReady(profile: FanProfile = makeProfile()) {
@@ -221,6 +227,29 @@ describe("ProfileEditor", () => {
     fireEvent.click(screen.getByRole("button", { name: /^guardar$/i }));
 
     expect(await screen.findByText(/perfil guardado/i)).toBeInTheDocument();
+  });
+
+  // Cambio de navegabilidad: guardar (con o sin cambios de setlist/
+  // favoritas) manda directo al fan map.
+  it("navigates to the fan map after a successful save", async () => {
+    const profile = await renderReady();
+    updateFanProfile.mockResolvedValue(profile);
+    const push = vi.fn();
+    useRouter.mockReturnValue({ replace: vi.fn(), push });
+
+    fireEvent.click(screen.getByRole("button", { name: /^guardar$/i }));
+
+    await waitFor(() => expect(push).toHaveBeenCalledWith("/map?view=fans"));
+  });
+
+  // Cubre el caso "o no" hizo cambios: un link siempre visible para salir
+  // al mapa sin pasar por Guardar.
+  it("always offers a link straight to the fan map, even without saving", async () => {
+    await renderReady();
+
+    const mapLink = screen.getByRole("link", { name: /ir al mapa/i });
+    expect(mapLink).toHaveAttribute("href", "/map?view=fans");
+    expect(updateFanProfile).not.toHaveBeenCalled();
   });
 
   it("shows an API error message when saving fails", async () => {
