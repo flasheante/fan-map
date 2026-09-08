@@ -2,6 +2,7 @@
 
 import { useEffect, useState, type FormEvent } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   getArtists,
   getArtistSongs,
@@ -68,6 +69,7 @@ function toSongListItemInputs(items: FanProfile["setlistSongs"]): SongListItemIn
 // Solo se monta cuando useAuth().status === "authenticated" (ver
 // app/profile/page.tsx) — acá adentro no hay que volver a chequear eso.
 export function ProfileEditor() {
+  const router = useRouter();
   const [loadStatus, setLoadStatus] = useState<LoadStatus>("loading");
   const [countries, setCountries] = useState<Country[]>([]);
   const [artists, setArtists] = useState<Artist[]>([]);
@@ -184,6 +186,15 @@ export function ProfileEditor() {
       prev.includes(artistId) ? prev.filter((id) => id !== artistId) : [...prev, artistId],
     );
   }
+
+  // Cambio de navegabilidad: guardar el perfil (con o sin cambios de
+  // setlist/favoritas) manda directo al fan map — el botón "Ir al mapa"
+  // de más abajo cubre el caso "sin cambios" (salir sin tocar Guardar).
+  useEffect(() => {
+    if (saveStatus === "success") {
+      router.push("/map?view=fans");
+    }
+  }, [saveStatus, router]);
 
   function handleCancel() {
     if (!profile) return;
@@ -384,13 +395,19 @@ export function ProfileEditor() {
         </p>
       )}
 
-      <div className="flex gap-3">
+      <div className="flex flex-wrap gap-3">
         <button type="submit" disabled={isSaving} className={pillPrimaryClass}>
           {isSaving ? "Guardando..." : "Guardar"}
         </button>
         <button type="button" onClick={handleCancel} disabled={isSaving} className={pillSecondaryClass}>
           Cancelar
         </button>
+        {/* Salida al mapa sin pasar por Guardar — cubre el caso "o no" hizo
+            cambios de setlist/favoritas. Guardar exitoso ya redirige solo
+            (ver el useEffect de saveStatus arriba). */}
+        <Link href="/map?view=fans" className={`${pillSecondaryClass} inline-flex items-center`}>
+          Ir al mapa
+        </Link>
       </div>
     </form>
   );

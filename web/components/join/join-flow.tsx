@@ -17,7 +17,8 @@ type ProfileCheckStatus = "idle" | "loading" | "has-profile" | "no-profile" | "e
 // logueado y con perfil ya no muestra ninguna pantalla intermedia — va
 // directo a /profile (router.replace, no push: no queremos que
 // "volver atrás" desde /profile te regrese a esta pantalla de tránsito).
-// El otro camino (sin perfil → FanForm → mapa) no cambia.
+// El otro camino (sin perfil → FanForm) también termina en /profile:
+// FanForm redirige ahí mismo tras crear el perfil (ver fan-form.tsx).
 export function JoinFlow() {
   const { status, user, logout } = useAuth();
   const router = useRouter();
