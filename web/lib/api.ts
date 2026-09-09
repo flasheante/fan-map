@@ -1,5 +1,26 @@
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000";
 
+// Base para los pedidos que dependen de la cookie de sesión (todo lo que
+// manda `credentials: "include"`, más googleLoginUrl). Nunca la URL directa
+// de la API: web (Vercel) y api (Render) son sitios distintos, y con
+// `credentials: "include"` eso los vuelve pedidos cross-site — que es
+// exactamente lo que un navegador en modo incógnito (o con protección
+// contra cookies de terceros) bloquea, sin importar SameSite=None. El
+// resultado era login que "pegaba" pero la app nunca veía la sesión.
+//
+// Acá SÍ hace falta que sea relativa (nunca absoluta): un fetch relativo
+// desde el browser resuelve contra el propio origin (fan-map-five.vercel.app
+// en prod), y next.config.ts reescribe /api/:path* hacia la API del lado
+// del servidor — el browser nunca le habla a Render directamente, así que
+// para él deja de ser cross-site y la cookie (incluida la que planta el
+// propio roundtrip de Google) queda first-party.
+//
+// El resto de las funciones de este archivo (getArtists, getCountries,
+// getArtistShows, etc.) no llevan cookie — no necesitan el proxy, y
+// corriendo server-side (RSC) una URL relativa ni siquiera resolvería, así
+// que siguen usando API_URL tal cual.
+const SESSION_API_URL = "/api";
+
 export interface Country {
   id: string;
   name: string;
@@ -288,7 +309,7 @@ export async function createFanProfile(
     ...(input.artistIds !== undefined ? { artistIds: input.artistIds } : {}),
   };
 
-  const res = await fetch(`${API_URL}/fan-profiles`, {
+  const res = await fetch(`${SESSION_API_URL}/fan-profiles`, {
     method: "POST",
     credentials: "include",
     headers: { "Content-Type": "application/json" },
@@ -307,7 +328,7 @@ export async function createFanProfile(
 // error, es el estado "no autenticado"), cualquier otro código es un
 // fallo real de la API y no se silencia.
 export async function getCurrentUser(): Promise<CurrentUser | null> {
-  const res = await fetch(`${API_URL}/auth/me`, {
+  const res = await fetch(`${SESSION_API_URL}/auth/me`, {
     credentials: "include",
     cache: "no-store",
   });
@@ -326,7 +347,7 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
 // con Set-Cookie en la respuesta) — el frontend solo debe olvidar el user
 // del estado en memoria (ver AuthProvider).
 export async function logout(): Promise<void> {
-  const res = await fetch(`${API_URL}/auth/logout`, {
+  const res = await fetch(`${SESSION_API_URL}/auth/logout`, {
     method: "POST",
     credentials: "include",
   });
@@ -348,7 +369,7 @@ export async function logout(): Promise<void> {
 // donde estaba (bug reportado — ver auth.controller.ts en la API, que es
 // quien lo valida y quien realmente decide a dónde volver).
 export function googleLoginUrl(returnTo: string): string {
-  return `${API_URL}/auth/google?returnTo=${encodeURIComponent(returnTo)}`;
+  return `${SESSION_API_URL}/auth/google?returnTo=${encodeURIComponent(returnTo)}`;
 }
 
 // GET /fan-profiles/me: el FanProfile del User autenticado. 404 = tiene
@@ -357,7 +378,7 @@ export function googleLoginUrl(returnTo: string): string {
 // para el estado de autenticación en sí). Cualquier otro código es un
 // fallo real y no se silencia.
 export async function getMyFanProfile(): Promise<FanProfile | null> {
-  const res = await fetch(`${API_URL}/fan-profiles/me`, {
+  const res = await fetch(`${SESSION_API_URL}/fan-profiles/me`, {
     credentials: "include",
     cache: "no-store",
   });
@@ -399,7 +420,7 @@ export async function updateFanProfile(
   id: string,
   input: UpdateFanProfileInput,
 ): Promise<FanProfile> {
-  const res = await fetch(`${API_URL}/fan-profiles/${id}`, {
+  const res = await fetch(`${SESSION_API_URL}/fan-profiles/${id}`, {
     method: "PATCH",
     credentials: "include",
     headers: { "Content-Type": "application/json" },
