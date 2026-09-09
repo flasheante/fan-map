@@ -33,9 +33,15 @@ body {
    26x26px, por debajo del tamaño táctil recomendado (~40px) — ver
    auditoría de navegación mobile. Sólo se agranda por debajo de `sm`
    (640px, el breakpoint que ya usa el resto del sitio); en desktop se deja
-   el tamaño de siempre. */
+   el tamaño de siempre.
+   Leaflet ya suma su propia regla `.leaflet-touch .leaflet-control-zoom-in`
+   (detecta touch y lo lleva a 30px) con más especificidad que
+   `.leaflet-control-zoom a` sola — sin repetir esa combinación acá, esa
+   regla de Leaflet gana y el 40px de abajo nunca se ve. */
 @media (max-width: 639px) {
-  .leaflet-control-zoom a {
+  .leaflet-control-zoom a,
+  .leaflet-touch .leaflet-control-zoom-in,
+  .leaflet-touch .leaflet-control-zoom-out {
     width: 40px;
     height: 40px;
     line-height: 40px;
