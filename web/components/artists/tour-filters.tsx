@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type ChangeEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import type { Country } from "@/lib/api";
 import type { TourCityOption, TourFilters } from "@/lib/tour-filters";
 
@@ -28,6 +28,21 @@ const labelClassName =
 
 function hasActiveFilters(filters: TourFilters): boolean {
   return Object.values(filters).some((value) => value !== undefined && value !== "");
+}
+
+// "Avanzados" = todo menos `search`, que tiene su propio input siempre
+// visible (ver advancedOpen más arriba).
+const ADVANCED_FILTER_KEYS = ["year", "countryId", "cityId", "dateFrom", "dateTo"] as const;
+
+function countActiveAdvancedFilters(filters: TourFilters): number {
+  return ADVANCED_FILTER_KEYS.filter((key) => {
+    const value = filters[key];
+    return value !== undefined && value !== "";
+  }).length;
+}
+
+function hasActiveAdvancedFilters(filters: TourFilters): boolean {
+  return countActiveAdvancedFilters(filters) > 0;
 }
 
 // Panel de filtros del historial de shows (Tour Map): puramente
@@ -68,6 +83,16 @@ export function TourFiltersPanel({
   // propaga a la URL con debounce.
   const [searchValue, setSearchValue] = useState(filters.search ?? "");
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Filtros "avanzados" (todo menos Buscar) plegados por default en mobile:
+  // 5 selects/inputs uno debajo del otro antes del primer resultado eran
+  // demasiado scroll para llegar al historial (ver auditoría mobile). Desde
+  // sm: siempre se ven en fila, sin importar este estado (ver
+  // advancedFieldsClassName más abajo). Arranca abierto si ya llega algún
+  // filtro avanzado activo (ej. volviendo con back/forward), para no
+  // esconderle a la persona un filtro que ella misma eligió.
+  const [advancedOpen, setAdvancedOpen] = useState(() => hasActiveAdvancedFilters(filters));
+  const advancedFiltersCount = useMemo(() => countActiveAdvancedFilters(filters), [filters]);
 
   // Resincroniza cuando `filters.search` cambia por afuera del debounce
   // propio: "Limpiar filtros", back/forward, u otro filtro que también
@@ -131,82 +156,111 @@ export function TourFiltersPanel({
           />
         </label>
 
-        <label className={`${labelClassName} min-w-[110px]`}>
-          Año
-          <select
-            value={filters.year !== undefined ? String(filters.year) : ALL_VALUE}
-            onChange={handleYearChange}
-            className={inputClassName}
-          >
-            <option value={ALL_VALUE}>Todos</option>
-            {years.map((year) => (
-              <option key={year} value={year}>
-                {year}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <label className={`${labelClassName} min-w-[140px]`}>
-          País
-          <select
-            value={filters.countryId ?? ALL_VALUE}
-            onChange={handleCountryChange}
-            className={inputClassName}
-          >
-            <option value={ALL_VALUE}>Todos</option>
-            {countries.map((country) => (
-              <option key={country.id} value={country.id}>
-                {country.name}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <label className={`${labelClassName} min-w-[160px]`}>
-          Ciudad
-          <select
-            value={filters.cityId ?? ALL_VALUE}
-            onChange={handleCityChange}
-            className={inputClassName}
-          >
-            <option value={ALL_VALUE}>Todas</option>
-            {cities.map((city) => (
-              <option key={city.id} value={city.id}>
-                {city.name}, {city.countryName}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <label className={`${labelClassName} min-w-[130px]`}>
-          Desde
-          <input
-            type="date"
-            value={filters.dateFrom ?? ""}
-            onChange={handleDateFromChange}
-            className={inputClassName}
-          />
-        </label>
-
-        <label className={`${labelClassName} min-w-[130px]`}>
-          Hasta
-          <input
-            type="date"
-            value={filters.dateTo ?? ""}
-            onChange={handleDateToChange}
-            className={inputClassName}
-          />
-        </label>
-
         <button
           type="button"
-          onClick={onClear}
-          disabled={!hasActiveFilters(filters)}
-          className="font-warning rounded-full border border-white px-4 py-2 text-xs font-bold uppercase tracking-wide transition-colors hover:bg-zinc-900 disabled:cursor-not-allowed disabled:border-zinc-700 disabled:text-zinc-600 disabled:hover:bg-transparent"
+          onClick={() => setAdvancedOpen((value) => !value)}
+          aria-expanded={advancedOpen}
+          aria-controls="tour-advanced-filters"
+          className="font-warning inline-flex min-h-10 items-center justify-center gap-1.5 self-start rounded-full border border-white px-4 text-xs font-bold uppercase tracking-wide transition-colors hover:bg-zinc-900 sm:hidden"
         >
-          Limpiar filtros
+          {advancedOpen ? "Ocultar filtros" : "Filtros"}
+          {advancedFiltersCount > 0 && (
+            <span
+              aria-hidden="true"
+              className="flex h-4 min-w-4 items-center justify-center rounded-full bg-white px-1 text-[10px] font-bold text-black"
+            >
+              {advancedFiltersCount}
+            </span>
+          )}
         </button>
+
+        {/* Año/País/Ciudad/Desde/Hasta + Limpiar filtros: plegados por
+            default en mobile detrás del botón "Filtros" de arriba (ver
+            advancedOpen). Desde sm: `sm:contents` disuelve este wrapper y
+            sus hijos vuelven a ser ítems directos de la fila de filtros, con
+            el mismo wrap de siempre — nunca hay una segunda implementación
+            del layout desktop. */}
+        <div
+          id="tour-advanced-filters"
+          className={`${advancedOpen ? "flex" : "hidden"} w-full flex-col gap-3 sm:contents`}
+        >
+          <label className={`${labelClassName} min-w-[110px]`}>
+            Año
+            <select
+              value={filters.year !== undefined ? String(filters.year) : ALL_VALUE}
+              onChange={handleYearChange}
+              className={inputClassName}
+            >
+              <option value={ALL_VALUE}>Todos</option>
+              {years.map((year) => (
+                <option key={year} value={year}>
+                  {year}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className={`${labelClassName} min-w-[140px]`}>
+            País
+            <select
+              value={filters.countryId ?? ALL_VALUE}
+              onChange={handleCountryChange}
+              className={inputClassName}
+            >
+              <option value={ALL_VALUE}>Todos</option>
+              {countries.map((country) => (
+                <option key={country.id} value={country.id}>
+                  {country.name}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className={`${labelClassName} min-w-[160px]`}>
+            Ciudad
+            <select
+              value={filters.cityId ?? ALL_VALUE}
+              onChange={handleCityChange}
+              className={inputClassName}
+            >
+              <option value={ALL_VALUE}>Todas</option>
+              {cities.map((city) => (
+                <option key={city.id} value={city.id}>
+                  {city.name}, {city.countryName}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className={`${labelClassName} min-w-[130px]`}>
+            Desde
+            <input
+              type="date"
+              value={filters.dateFrom ?? ""}
+              onChange={handleDateFromChange}
+              className={inputClassName}
+            />
+          </label>
+
+          <label className={`${labelClassName} min-w-[130px]`}>
+            Hasta
+            <input
+              type="date"
+              value={filters.dateTo ?? ""}
+              onChange={handleDateToChange}
+              className={inputClassName}
+            />
+          </label>
+
+          <button
+            type="button"
+            onClick={onClear}
+            disabled={!hasActiveFilters(filters)}
+            className="font-warning inline-flex min-h-10 items-center justify-center rounded-full border border-white px-4 text-xs font-bold uppercase tracking-wide transition-colors hover:bg-zinc-900 disabled:cursor-not-allowed disabled:border-zinc-700 disabled:text-zinc-600 disabled:hover:bg-transparent"
+          >
+            Limpiar filtros
+          </button>
+        </div>
       </div>
     </section>
   );
