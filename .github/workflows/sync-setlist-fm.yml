@@ -30,10 +30,18 @@ jobs:
     defaults:
       run:
         working-directory: api
+    # A nivel job, no sólo en el último step: prisma.config.ts lee
+    # DATABASE_URL con env() incluso para `prisma generate` (que no llega a
+    # conectarse a la base, pero sí evalúa la config), así que sin esto acá
+    # ya falla antes de llegar al sync.
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      SETLIST_FM_API_KEY: ${{ secrets.SETLIST_FM_API_KEY }}
+      SETLIST_FM_REQUESTS_PER_SECOND: ${{ secrets.SETLIST_FM_REQUESTS_PER_SECOND }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 24
           cache: npm
@@ -41,8 +49,11 @@ jobs:
 
       - run: npm ci
 
+      # `npm ci` sólo instala paquetes — a diferencia de versiones viejas de
+      # Prisma, acá nada dispara `prisma generate` solo (no hay postinstall
+      # para eso), así que sin este paso @prisma/client queda con sus stubs
+      # vacíos y ts-node explota con "has no exported member 'PrismaClient'"
+      # apenas Nest intenta instanciar PrismaService.
+      - run: npx prisma generate
+
       - run: npm run sync:setlist-fm
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          SETLIST_FM_API_KEY: ${{ secrets.SETLIST_FM_API_KEY }}
-          SETLIST_FM_REQUESTS_PER_SECOND: ${{ secrets.SETLIST_FM_REQUESTS_PER_SECOND }}
