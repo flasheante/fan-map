@@ -34,17 +34,22 @@ body {
    auditoría de navegación mobile. Sólo se agranda por debajo de `sm`
    (640px, el breakpoint que ya usa el resto del sitio); en desktop se deja
    el tamaño de siempre.
-   Leaflet ya suma su propia regla `.leaflet-touch .leaflet-control-zoom-in`
-   (detecta touch y lo lleva a 30px) con más especificidad que
-   `.leaflet-control-zoom a` sola — sin repetir esa combinación acá, esa
-   regla de Leaflet gana y el 40px de abajo nunca se ve. */
+   `leaflet/dist/leaflet.css` no llega en este archivo: se importa desde
+   fan-map.tsx/tour-map.tsx (componentes cargados client-side vía
+   next/dynamic), así que Next inyecta ese CSS en el <head> recién cuando
+   el mapa monta — después de este archivo. Ahí Leaflet mete su propia
+   regla `.leaflet-touch .leaflet-control-zoom-in` (detecta touch y la
+   lleva a 30px), misma especificidad que la de acá: a igual
+   especificidad gana la que se inyectó último, o sea la de Leaflet, y el
+   40px de abajo nunca se ve. `!important` es el único empate que no
+   depende de en qué orden termine cargando cada CSS. */
 @media (max-width: 639px) {
   .leaflet-control-zoom a,
   .leaflet-touch .leaflet-control-zoom-in,
   .leaflet-touch .leaflet-control-zoom-out {
-    width: 40px;
-    height: 40px;
-    line-height: 40px;
-    font-size: 20px;
+    width: 40px !important;
+    height: 40px !important;
+    line-height: 40px !important;
+    font-size: 20px !important;
   }
 }
