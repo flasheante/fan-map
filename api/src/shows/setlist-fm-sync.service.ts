@@ -121,6 +121,16 @@ export class SetlistFmSyncService {
       if (outcome.setlistUpdated) summary.setlistsUpdated++;
     }
 
+    // Sólo se llega hasta acá si el loop de arriba no tiró — si
+    // fetchAllSetlists o algún persistShow fallan, la excepción corta la
+    // función antes de esta línea y setlistsSyncedAt queda como estaba, sin
+    // marcar como "sincronizado" algo que en realidad falló a mitad de
+    // camino.
+    await this.prisma.artist.update({
+      where: { id: artist.id },
+      data: { setlistsSyncedAt: new Date() },
+    });
+
     return summary;
   }
 

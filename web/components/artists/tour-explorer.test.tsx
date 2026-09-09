@@ -33,6 +33,7 @@ const artist: Artist = {
   imageUrl: null,
   createdAt: "2026-01-01T00:00:00.000Z",
   updatedAt: "2026-01-01T00:00:00.000Z",
+  setlistsSyncedAt: "2026-09-07T02:00:00.000Z",
 };
 
 const argentina = { id: "country-ar", name: "Argentina", code: "AR" };
@@ -95,6 +96,34 @@ describe("TourExplorer", () => {
     ).toBeInTheDocument();
     expect(screen.getByLabelText(/buscar/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/año/i)).toBeInTheDocument();
+  });
+
+  // Pedido: "Actualizado" con fecha y hora de la última corrida del sync,
+  // debajo del mapa y alineado a la derecha.
+  it("shows when the setlist.fm sync was last updated", () => {
+    setup();
+    render(<TourExplorer artist={artist} shows={twoCityShows} />);
+
+    expect(screen.getByText(/actualizado/i)).toBeInTheDocument();
+  });
+
+  it("right-aligns the 'Actualizado' message", () => {
+    setup();
+    render(<TourExplorer artist={artist} shows={twoCityShows} />);
+
+    expect(screen.getByText(/actualizado/i)).toHaveClass("text-right");
+  });
+
+  it("shows nothing when the artist has never synced yet", () => {
+    setup();
+    render(
+      <TourExplorer
+        artist={{ ...artist, setlistsSyncedAt: null }}
+        shows={twoCityShows}
+      />,
+    );
+
+    expect(screen.queryByText(/actualizado/i)).not.toBeInTheDocument();
   });
 
   it("shows the total city count when no filters are applied", () => {

@@ -1,5 +1,12 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { Artist, City, Country, FanProfile, Prisma, Song } from '@prisma/client';
+import {
+  Artist,
+  City,
+  Country,
+  FanProfile,
+  Prisma,
+  Song,
+} from '@prisma/client';
 import { PrismaService } from '../database/prisma.service';
 import { FindArtistFansQueryDto } from './dto/find-artist-fans-query.dto';
 
@@ -158,6 +165,9 @@ function toArtistResponse(artist: Artist) {
     imageUrl: artist.imageUrl,
     createdAt: artist.createdAt,
     updatedAt: artist.updatedAt,
+    // Última corrida exitosa de SetlistFmSyncService.syncTheWarning() — ver
+    // ese comentario en schema.prisma. null hasta la primera corrida.
+    setlistsSyncedAt: artist.setlistsSyncedAt,
   };
 }
 
