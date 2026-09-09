@@ -1,0 +1,48 @@
+name: Weekly setlist.fm sync
+
+# Domingo 23:00 hora Argentina (UTC-3) = lunes 02:00 UTC. Gratis en GitHub
+# Actions — alternativa al Cron Job de Render, que es pago. El script en sí
+# no cambia: sigue siendo sólo `npm run sync:setlist-fm`
+# (api/src/cli/sync-setlist-fm.ts), nunca expuesto como endpoint HTTP a
+# propósito (ver el comentario de ese archivo).
+#
+# Requiere estos secrets del repo (Settings → Secrets and variables →
+# Actions → New repository secret), con los mismos valores que ya usa la
+# API en Render:
+#   DATABASE_URL             — la URL EXTERNA de la base (no la interna de
+#                               Render, que sólo es alcanzable desde otros
+#                               servicios de Render); puede necesitar
+#                               ?sslmode=require al final si la conexión
+#                               falla por SSL.
+#   SETLIST_FM_API_KEY
+#   SETLIST_FM_REQUESTS_PER_SECOND (opcional — si no está, el script usa
+#                               su propio default)
+on:
+  schedule:
+    - cron: "0 2 * * 1"
+  # Para poder correrlo a mano desde la pestaña Actions sin esperar al
+  # domingo (ej. para probar que los secrets están bien cargados).
+  workflow_dispatch: {}
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: api
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: api/package-lock.json
+
+      - run: npm ci
+
+      - run: npm run sync:setlist-fm
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          SETLIST_FM_API_KEY: ${{ secrets.SETLIST_FM_API_KEY }}
+          SETLIST_FM_REQUESTS_PER_SECOND: ${{ secrets.SETLIST_FM_REQUESTS_PER_SECOND }}
