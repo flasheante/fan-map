@@ -234,6 +234,50 @@ describe("TourFiltersPanel", () => {
     expect(screen.getByLabelText(/hasta/i)).toHaveValue("2025-12-31");
   });
 
+  // Colapso en mobile (ver auditoría de navegación mobile): Año/País/Ciudad/
+  // Desde/Hasta arrancan plegados detrás del botón "Filtros" cuando no hay
+  // ningún filtro avanzado activo.
+  it("starts with the 'Filtros' toggle collapsed when no advanced filter is active", () => {
+    renderPanel();
+
+    expect(
+      screen.getByRole("button", { name: /^filtros$/i }),
+    ).toHaveAttribute("aria-expanded", "false");
+  });
+
+  it("starts already expanded when an advanced filter arrives active (e.g. from the URL)", () => {
+    renderPanel({ filters: { year: 2024 } });
+
+    expect(
+      screen.getByRole("button", { name: /ocultar filtros/i }),
+    ).toHaveAttribute("aria-expanded", "true");
+  });
+
+  it("toggles aria-expanded when the 'Filtros' button is clicked", () => {
+    renderPanel();
+
+    const toggle = screen.getByRole("button", { name: /^filtros$/i });
+    fireEvent.click(toggle);
+    expect(screen.getByRole("button", { name: /ocultar filtros/i })).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /ocultar filtros/i }));
+    expect(screen.getByRole("button", { name: /^filtros$/i })).toHaveAttribute(
+      "aria-expanded",
+      "false",
+    );
+  });
+
+  it("shows a count badge on the 'Filtros' toggle for each active advanced filter, not counting search", () => {
+    renderPanel({
+      filters: { search: "monterrey", year: 2024, countryId: mexico.id },
+    });
+
+    expect(screen.getByRole("button", { name: /ocultar filtros/i })).toHaveTextContent("2");
+  });
+
   it("does not crash when there are no years/countries/cities yet", () => {
     render(
       <TourFiltersPanel

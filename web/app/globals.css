@@ -27,3 +27,18 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* Controles de zoom de Leaflet (FanMap y Tour Map, ver components/map y
+   components/artists/tour-map.tsx): el tamaño default de Leaflet es
+   26x26px, por debajo del tamaño táctil recomendado (~40px) — ver
+   auditoría de navegación mobile. Sólo se agranda por debajo de `sm`
+   (640px, el breakpoint que ya usa el resto del sitio); en desktop se deja
+   el tamaño de siempre. */
+@media (max-width: 639px) {
+  .leaflet-control-zoom a {
+    width: 40px;
+    height: 40px;
+    line-height: 40px;
+    font-size: 20px;
+  }
+}

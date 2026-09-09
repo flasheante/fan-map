@@ -1,6 +1,5 @@
-import Link from "next/link";
+import { ArtistNav } from "@/components/artists/artist-nav";
 import { ArtistStatsSummary } from "@/components/artists/artist-stats";
-import { JoinOrProfileLink } from "@/components/artists/join-or-profile-link";
 import { TheWarningLogo } from "@/components/artists/the-warning-logo";
 import { TopSongs } from "@/components/artists/top-songs";
 import { TourExplorer } from "@/components/artists/tour-explorer";
@@ -104,21 +103,7 @@ export default async function TheWarningArtistPage() {
             </p>
           </div>
         </div>
-        <div className="font-warning flex items-center gap-3 text-sm font-bold uppercase tracking-wide">
-          <Link
-            href="/artists/the-warning/tour"
-            className="rounded-full border border-white px-5 py-2.5 transition-colors hover:bg-zinc-900"
-          >
-            Historial de shows
-          </Link>
-          <Link
-            href="/map?view=fans"
-            className="rounded-full border border-white px-5 py-2.5 transition-colors hover:bg-zinc-900"
-          >
-            Fan Map
-          </Link>
-          <JoinOrProfileLink />
-        </div>
+        <ArtistNav />
       </header>
       <ArtistStatsSummary stats={stats} />
       <TourExplorer artist={artist} shows={shows} />

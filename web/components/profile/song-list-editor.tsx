@@ -11,8 +11,11 @@ function normalize(value: string): string {
     .toLowerCase();
 }
 
+// min-h-10 (40px): sin esto "Agregar"/"Quitar" quedaban con un alto real de
+// ~24px (px-3 py-1 + texto xs), por debajo del tamaño táctil recomendado —
+// ver auditoría de navegación mobile.
 const pillClass =
-  "font-warning rounded-full border border-white px-3 py-1 text-xs font-bold uppercase tracking-wide text-white transition-colors hover:bg-zinc-900 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent";
+  "font-warning inline-flex min-h-10 items-center justify-center rounded-full border border-white px-3 text-xs font-bold uppercase tracking-wide text-white transition-colors hover:bg-zinc-900 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent";
 
 interface SongListEditorProps {
   songs: ArtistSong[];
