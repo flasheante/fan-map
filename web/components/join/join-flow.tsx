@@ -60,7 +60,7 @@ export function JoinFlow() {
   if (status === "unauthenticated") {
     return (
       <a
-        href={googleLoginUrl()}
+        href={googleLoginUrl("/join")}
         className="rounded-full bg-foreground px-5 py-2.5 text-center font-medium text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc]"
       >
         Continuar con Google

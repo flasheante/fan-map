@@ -40,6 +40,20 @@ describe("ProfilePage", () => {
     expect(screen.queryByTestId("profile-editor")).not.toBeInTheDocument();
   });
 
+  // Bug reportado: sin decirle a la API a dónde volver, el login "pegaba"
+  // pero terminabas en la landing en vez de acá — ver googleLoginUrl en
+  // lib/api.ts y el callback en la API.
+  it("asks to come back to /profile after logging in", () => {
+    useAuth.mockReturnValue({ status: "unauthenticated", user: null, logout: vi.fn() });
+
+    render(<ProfilePage />);
+
+    expect(screen.getByRole("link", { name: /continuar con google/i })).toHaveAttribute(
+      "href",
+      expect.stringContaining(`returnTo=${encodeURIComponent("/profile")}`),
+    );
+  });
+
   it("mounts the ProfileEditor only when authenticated", () => {
     useAuth.mockReturnValue({
       status: "authenticated",

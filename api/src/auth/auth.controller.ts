@@ -18,9 +18,11 @@ import { AuthService } from './auth.service';
 import { SessionService } from './session.service';
 import { SessionAuthGuard } from './session-auth.guard';
 import {
+  OAUTH_RETURN_TO_COOKIE_NAME,
   OAUTH_STATE_COOKIE_NAME,
   OAUTH_STATE_MAX_AGE_MS,
   SESSION_COOKIE_NAME,
+  sanitizeReturnTo,
 } from './auth.constants';
 import { AUTH_CONTROLLER_CONFIG } from './auth.tokens';
 import type { AuthControllerConfig } from './auth.tokens';
@@ -43,17 +45,31 @@ export class AuthController {
     private readonly googleOAuth: GoogleOAuthClient,
     private readonly authService: AuthService,
     private readonly sessions: SessionService,
-    @Inject(AUTH_CONTROLLER_CONFIG) private readonly config: AuthControllerConfig,
+    @Inject(AUTH_CONTROLLER_CONFIG)
+    private readonly config: AuthControllerConfig,
   ) {}
 
   @Get('google')
-  googleLogin(@Res() res: Response) {
+  googleLogin(
+    @Query('returnTo') returnTo: string | undefined,
+    @Res() res: Response,
+  ) {
     const state = randomBytes(16).toString('hex');
     res.cookie(
       OAUTH_STATE_COOKIE_NAME,
       state,
       this.cookieOptions(OAUTH_STATE_MAX_AGE_MS),
     );
+
+    const safeReturnTo = sanitizeReturnTo(returnTo);
+    if (safeReturnTo) {
+      res.cookie(
+        OAUTH_RETURN_TO_COOKIE_NAME,
+        safeReturnTo,
+        this.cookieOptions(OAUTH_STATE_MAX_AGE_MS),
+      );
+    }
+
     res.redirect(this.googleOAuth.getAuthUrl(state));
   }
 
@@ -65,11 +81,12 @@ export class AuthController {
     @Res() res: Response,
   ) {
     const cookieState = req.signedCookies?.[OAUTH_STATE_COOKIE_NAME] as
-      | string
-      | false
-      | undefined;
-    // Se borra siempre, matchee o no: es de un solo uso.
+      string | false | undefined;
+    const returnTo = req.signedCookies?.[OAUTH_RETURN_TO_COOKIE_NAME] as
+      string | false | undefined;
+    // Se borran siempre, matcheen o no: son de un solo uso.
     res.clearCookie(OAUTH_STATE_COOKIE_NAME, this.cookieOptions());
+    res.clearCookie(OAUTH_RETURN_TO_COOKIE_NAME, this.cookieOptions());
 
     if (!code || !state || !cookieState || state !== cookieState) {
       throw new UnauthorizedException('Invalid OAuth state');
@@ -83,7 +100,13 @@ export class AuthController {
       ...this.cookieOptions(),
       expires: session.expiresAt,
     });
-    res.redirect(this.config.webAppUrl);
+    // `returnTo` ya se saneó en GET /auth/google antes de guardarse en la
+    // cookie (ver sanitizeReturnTo) — acá sólo puede venir undefined (no se
+    // pidió) o `false` (cookie-parser: la firma no matchea), nunca un path
+    // sin validar.
+    res.redirect(
+      `${this.config.webAppUrl}${typeof returnTo === 'string' ? returnTo : ''}`,
+    );
   }
 
   // Protegido por SessionAuthGuard: si llega acá, request.user ya es

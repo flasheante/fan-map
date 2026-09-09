@@ -2,6 +2,7 @@ import {
   DEFAULT_SESSION_MAX_AGE_MS,
   resolveSecureCookie,
   resolveSessionMaxAgeMs,
+  sanitizeReturnTo,
 } from './auth.constants';
 
 describe('resolveSessionMaxAgeMs', () => {
@@ -38,5 +39,47 @@ describe('resolveSecureCookie', () => {
   it('defaults to false outside production when unset', () => {
     expect(resolveSecureCookie(undefined, 'development')).toBe(false);
     expect(resolveSecureCookie(undefined, undefined)).toBe(false);
+  });
+});
+
+describe('sanitizeReturnTo', () => {
+  it('returns undefined when nothing is given', () => {
+    expect(sanitizeReturnTo(undefined)).toBeUndefined();
+  });
+
+  it('accepts a simple relative path', () => {
+    expect(sanitizeReturnTo('/join')).toBe('/join');
+  });
+
+  it('accepts a relative path with a query string', () => {
+    expect(sanitizeReturnTo('/map?view=fans')).toBe('/map?view=fans');
+  });
+
+  it('accepts the root path', () => {
+    expect(sanitizeReturnTo('/')).toBe('/');
+  });
+
+  it('rejects an absolute URL to another host', () => {
+    expect(sanitizeReturnTo('https://evil.example.com')).toBeUndefined();
+  });
+
+  // El browser trata "//host" y "/\host" como URLs absolutas (protocol-
+  // relative) hacia otro origin, no como paths — mismo riesgo de open
+  // redirect que una URL absoluta con esquema.
+  it('rejects a protocol-relative URL', () => {
+    expect(sanitizeReturnTo('//evil.example.com')).toBeUndefined();
+    expect(sanitizeReturnTo('/\\evil.example.com')).toBeUndefined();
+  });
+
+  it('rejects a path without a leading slash', () => {
+    expect(sanitizeReturnTo('join')).toBeUndefined();
+  });
+
+  it('rejects an empty string', () => {
+    expect(sanitizeReturnTo('')).toBeUndefined();
+  });
+
+  it('rejects a value containing whitespace', () => {
+    expect(sanitizeReturnTo('/join redirect')).toBeUndefined();
   });
 });
