@@ -511,8 +511,17 @@ describe("logout", () => {
 });
 
 describe("googleLoginUrl", () => {
-  it("points at GET /auth/google on the API origin", () => {
-    expect(googleLoginUrl()).toMatch(/\/auth\/google$/);
+  it("points at GET /auth/google on the API origin, with returnTo as a query param", () => {
+    expect(googleLoginUrl("/join")).toMatch(/\/auth\/google\?returnTo=%2Fjoin$/);
+  });
+
+  // Sin esto, GET /auth/google/callback (API) no tiene forma de saber a
+  // qué path del front volver y siempre cae en la raíz del sitio — ver el
+  // comentario de googleLoginUrl en lib/api.ts.
+  it("URL-encodes the returnTo path", () => {
+    expect(googleLoginUrl("/map?view=fans")).toContain(
+      `returnTo=${encodeURIComponent("/map?view=fans")}`,
+    );
   });
 });
 

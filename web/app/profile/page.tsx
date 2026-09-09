@@ -61,7 +61,7 @@ export default function ProfilePage() {
       {status === "unauthenticated" && (
         <div className="flex flex-col gap-3 px-4 py-6">
           <p className="text-zinc-400">Iniciá sesión para ver y editar tu perfil.</p>
-          <a href={googleLoginUrl()} className={primaryPillClass}>
+          <a href={googleLoginUrl("/profile")} className={primaryPillClass}>
             Continuar con Google
           </a>
         </div>

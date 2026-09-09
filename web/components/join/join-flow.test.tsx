@@ -81,6 +81,17 @@ describe("JoinFlow", () => {
     expect(screen.queryByTestId("fan-form")).not.toBeInTheDocument();
   });
 
+  // Bug reportado: sin decirle a la API a dónde volver, el login "pegaba"
+  // pero terminabas en la landing en vez de acá — ver googleLoginUrl en
+  // lib/api.ts y el callback en la API.
+  it("asks to come back to /join after logging in", () => {
+    mockAuth("unauthenticated");
+
+    render(<JoinFlow />);
+
+    expect(googleLoginUrl).toHaveBeenCalledWith("/join");
+  });
+
   it("shows an error message when the session check itself failed, without prompting login", () => {
     mockAuth("error");
 

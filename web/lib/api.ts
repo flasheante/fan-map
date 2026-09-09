@@ -337,10 +337,18 @@ export async function logout(): Promise<void> {
 }
 
 // URL de inicio del flujo de Google OAuth. Es una navegación de página
-// completa (<a href={googleLoginUrl()}>), no un fetch: el backend hace el
-// redirect a Google y de vuelta, y termina seteando la cookie de sesión.
-export function googleLoginUrl(): string {
-  return `${API_URL}/auth/google`;
+// completa (<a href={googleLoginUrl(returnTo)}>), no un fetch: el backend
+// hace el redirect a Google y de vuelta, y termina seteando la cookie de
+// sesión.
+//
+// `returnTo` es el path del propio front al que volver una vez logueado
+// (ej. "/join", "/profile") — sin esto, GET /auth/google/callback siempre
+// redirige a la raíz del sitio sin importar desde dónde se inició el login,
+// así que la persona se loguea bien pero "aparece" en la landing en vez de
+// donde estaba (bug reportado — ver auth.controller.ts en la API, que es
+// quien lo valida y quien realmente decide a dónde volver).
+export function googleLoginUrl(returnTo: string): string {
+  return `${API_URL}/auth/google?returnTo=${encodeURIComponent(returnTo)}`;
 }
 
 // GET /fan-profiles/me: el FanProfile del User autenticado. 404 = tiene
