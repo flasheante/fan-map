@@ -22,7 +22,8 @@ describe('Artists (e2e)', () => {
   // datos de apoyo para los endpoints de Artists, así que necesitan una
   // sesión real igual que fan-profiles.e2e-spec.ts / auth.e2e-spec.ts, sin
   // pegarle a Google.
-  const sessionSecret = process.env.SESSION_SECRET ?? 'dev-insecure-session-secret';
+  const sessionSecret =
+    process.env.SESSION_SECRET ?? 'dev-insecure-session-secret';
 
   function signedCookieHeader(sessionId: string): string {
     const signed = `s:${sign(sessionId, sessionSecret)}`;
@@ -91,6 +92,7 @@ describe('Artists (e2e)', () => {
         imageUrl: null,
         createdAt: expect.any(String),
         updatedAt: expect.any(String),
+        setlistsSyncedAt: null,
       });
     });
   });
@@ -108,6 +110,7 @@ describe('Artists (e2e)', () => {
         imageUrl: null,
         createdAt: expect.any(String),
         updatedAt: expect.any(String),
+        setlistsSyncedAt: null,
       });
     });
 
@@ -238,12 +241,16 @@ describe('Artists (e2e)', () => {
           fanProfileId: { in: fanProfiles.map((profile) => profile.id) },
         },
       });
-      await prisma.fanProfile.deleteMany({ where: { userId: { in: userIds } } });
+      await prisma.fanProfile.deleteMany({
+        where: { userId: { in: userIds } },
+      });
       // Session referencia al User por FK: hay que borrarla antes que el User.
       await prisma.session.deleteMany({
         where: { id: { in: createdSessionIds } },
       });
-      await prisma.user.deleteMany({ where: { email: { in: createdUserEmails } } });
+      await prisma.user.deleteMany({
+        where: { email: { in: createdUserEmails } },
+      });
       await prisma.artist.deleteMany({
         where: { id: { in: [artistXId, artistYId, artistZId] } },
       });
@@ -302,6 +309,7 @@ describe('Artists (e2e)', () => {
         imageUrl: null,
         createdAt: expect.any(String),
         updatedAt: expect.any(String),
+        setlistsSyncedAt: null,
       });
 
       const ids: string[] = response.body.fans.map(
@@ -518,7 +526,11 @@ describe('Artists (e2e)', () => {
         data: { showId: otherShow.id },
       });
       await prisma.setlistSong.create({
-        data: { setlistId: otherSetlist.id, title: 'Other Artist Song', position: 1 },
+        data: {
+          setlistId: otherSetlist.id,
+          title: 'Other Artist Song',
+          position: 1,
+        },
       });
     });
 
@@ -539,12 +551,16 @@ describe('Artists (e2e)', () => {
           fanProfileId: { in: fanProfiles.map((profile) => profile.id) },
         },
       });
-      await prisma.fanProfile.deleteMany({ where: { userId: { in: userIds } } });
+      await prisma.fanProfile.deleteMany({
+        where: { userId: { in: userIds } },
+      });
       // Session referencia al User por FK: hay que borrarla antes que el User.
       await prisma.session.deleteMany({
         where: { id: { in: createdSessionIds } },
       });
-      await prisma.user.deleteMany({ where: { email: { in: createdUserEmails } } });
+      await prisma.user.deleteMany({
+        where: { email: { in: createdUserEmails } },
+      });
 
       await prisma.setlistSong.deleteMany({
         where: { setlist: { show: { artistId: { in: artistIds } } } },
@@ -926,7 +942,9 @@ describe('Artists (e2e)', () => {
         .get(`/artists/${catalogArtistId}/songs`)
         .expect(200);
 
-      const ids: string[] = response.body.map((song: { id: string }) => song.id);
+      const ids: string[] = response.body.map(
+        (song: { id: string }) => song.id,
+      );
       expect(ids).not.toContain(otherArtistSongId);
     });
 

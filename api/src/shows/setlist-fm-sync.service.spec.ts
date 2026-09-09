@@ -12,7 +12,7 @@ import {
 describe('SetlistFmSyncService', () => {
   let service: SetlistFmSyncService;
   let prisma: {
-    artist: { findUnique: jest.Mock };
+    artist: { findUnique: jest.Mock; update: jest.Mock };
     country: { findUnique: jest.Mock };
     city: { findUnique: jest.Mock };
     $transaction: jest.Mock;
@@ -82,7 +82,10 @@ describe('SetlistFmSyncService', () => {
     };
 
     prisma = {
-      artist: { findUnique: jest.fn().mockResolvedValue(artist) },
+      artist: {
+        findUnique: jest.fn().mockResolvedValue(artist),
+        update: jest.fn().mockResolvedValue(artist),
+      },
       country: { findUnique: jest.fn().mockResolvedValue(country) },
       city: { findUnique: jest.fn().mockResolvedValue(city) },
       $transaction: jest.fn((cb: (tx: unknown) => unknown) => cb(tx)),
@@ -305,9 +308,7 @@ describe('SetlistFmSyncService', () => {
   // concert with no songs logged yet, rather than sending `sets: { set: [] }`.
   it('does not create a setlist when the "sets" field is missing entirely', async () => {
     const { sets: _sets, ...withoutSets } = externalSetlist();
-    client.getArtistSetlists.mockResolvedValue(
-      page([withoutSets as SetlistFmSetlist]),
-    );
+    client.getArtistSetlists.mockResolvedValue(page([withoutSets]));
 
     const summary = await service.syncTheWarning();
 
@@ -397,6 +398,7 @@ describe('SetlistFmSyncService', () => {
 
     await expect(service.syncTheWarning()).rejects.toThrow(error);
     expect(prisma.$transaction).not.toHaveBeenCalled();
+    expect(prisma.artist.update).not.toHaveBeenCalled();
   });
 
   it('propagates persistence failures instead of swallowing them', async () => {
@@ -405,5 +407,44 @@ describe('SetlistFmSyncService', () => {
     prisma.$transaction.mockRejectedValue(dbError);
 
     await expect(service.syncTheWarning()).rejects.toThrow(dbError);
+    expect(prisma.artist.update).not.toHaveBeenCalled();
+  });
+
+  // El botón "Actualizado" de /artists/the-warning (ver artist-stats o el
+  // header del historial) lee esto — ver también artists.controller y el
+  // cron semanal (api/README.md).
+  describe('setlistsSyncedAt', () => {
+    it('stamps the artist with the current time once the run finishes without throwing', async () => {
+      jest.useFakeTimers().setSystemTime(new Date('2026-09-07T02:00:00.000Z'));
+      try {
+        client.getArtistSetlists.mockResolvedValue(page([]));
+
+        await service.syncTheWarning();
+
+        expect(prisma.artist.update).toHaveBeenCalledWith({
+          where: { id: artist.id },
+          data: { setlistsSyncedAt: new Date('2026-09-07T02:00:00.000Z') },
+        });
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
+    it('stamps the artist even on a run that finds nothing new (still means the check ran)', async () => {
+      client.getArtistSetlists.mockResolvedValue(page([]));
+
+      await service.syncTheWarning();
+
+      expect(prisma.artist.update).toHaveBeenCalledTimes(1);
+    });
+
+    it('never stamps the artist when the sync run throws partway through', async () => {
+      client.getArtistSetlists.mockResolvedValue(page([externalSetlist()]));
+      prisma.$transaction.mockRejectedValue(new Error('constraint violation'));
+
+      await expect(service.syncTheWarning()).rejects.toThrow();
+
+      expect(prisma.artist.update).not.toHaveBeenCalled();
+    });
   });
 });

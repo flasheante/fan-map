@@ -3,6 +3,7 @@
 import { useCallback, useMemo } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { Artist, ArtistShow } from "@/lib/api";
+import { formatSyncedAt } from "@/lib/format-synced-at";
 import { groupShowsByCity } from "@/lib/the-warning-tour-map";
 import { calculateTourStats } from "@/lib/the-warning-tour-stats";
 import {
@@ -118,6 +119,17 @@ export function TourExplorer({ artist, shows }: TourExplorerProps) {
       <div className="min-h-[60vh] flex-1">
         <TourMapLoader cities={mapCities} />
       </div>
+
+      {/* Pedido: "Actualizado" con fecha y hora de la última corrida del
+          sync de setlist.fm, debajo del mapa y a la derecha. artist ya
+          incluye setlistsSyncedAt (ver GET /artists) — null hasta la
+          primera corrida, así que no se muestra nada hasta entonces en vez
+          de un "Actualizado: -" confuso. */}
+      {artist.setlistsSyncedAt && (
+        <p className="border-t border-zinc-800 px-4 py-2 text-right text-xs text-zinc-500">
+          Actualizado {formatSyncedAt(artist.setlistsSyncedAt)}
+        </p>
+      )}
 
       {!hasAnyShows && (
         <p className="border-t border-zinc-800 px-4 py-3 text-center text-sm text-zinc-400">

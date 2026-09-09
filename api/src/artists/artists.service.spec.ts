@@ -19,6 +19,7 @@ describe('ArtistsService', () => {
     imageUrl: null,
     createdAt: new Date('2026-01-01T00:00:00.000Z'),
     updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+    setlistsSyncedAt: null,
   };
 
   beforeEach(async () => {
@@ -61,6 +62,7 @@ describe('ArtistsService', () => {
           imageUrl: theWarning.imageUrl,
           createdAt: theWarning.createdAt,
           updatedAt: theWarning.updatedAt,
+          setlistsSyncedAt: theWarning.setlistsSyncedAt,
         },
       ]);
     });
@@ -88,6 +90,7 @@ describe('ArtistsService', () => {
         imageUrl: theWarning.imageUrl,
         createdAt: theWarning.createdAt,
         updatedAt: theWarning.updatedAt,
+        setlistsSyncedAt: theWarning.setlistsSyncedAt,
       });
     });
 
@@ -101,6 +104,22 @@ describe('ArtistsService', () => {
       const result = await service.findOne(theWarning.id);
 
       expect(result.imageUrl).toBe('https://example.com/tw.jpg');
+    });
+
+    // El badge "Actualizado" de /artists/the-warning depende de este campo
+    // (ver setlist-fm-sync.service.ts) — null hasta la primera corrida.
+    it('returns setlistsSyncedAt when the artist has synced before', async () => {
+      const synced = {
+        ...theWarning,
+        setlistsSyncedAt: new Date('2026-09-07T02:00:00.000Z'),
+      };
+      prisma.artist.findUnique.mockResolvedValue(synced);
+
+      const result = await service.findOne(theWarning.id);
+
+      expect(result.setlistsSyncedAt).toEqual(
+        new Date('2026-09-07T02:00:00.000Z'),
+      );
     });
 
     it('throws NotFoundException when the artist does not exist', async () => {
@@ -139,9 +158,9 @@ describe('ArtistsService', () => {
     it('throws NotFoundException when the artist does not exist', async () => {
       prisma.artist.findUnique.mockResolvedValue(null);
 
-      await expect(
-        service.findFans(theWarning.id, query),
-      ).rejects.toThrow(NotFoundException);
+      await expect(service.findFans(theWarning.id, query)).rejects.toThrow(
+        NotFoundException,
+      );
       expect(prisma.fanProfile.findMany).not.toHaveBeenCalled();
     });
 
@@ -195,6 +214,7 @@ describe('ArtistsService', () => {
           imageUrl: theWarning.imageUrl,
           createdAt: theWarning.createdAt,
           updatedAt: theWarning.updatedAt,
+          setlistsSyncedAt: theWarning.setlistsSyncedAt,
         },
         fans: [
           {

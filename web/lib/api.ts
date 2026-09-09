@@ -42,6 +42,10 @@ export interface Artist {
   imageUrl: string | null;
   createdAt: string;
   updatedAt: string;
+  // Última corrida exitosa del sync de setlist.fm (ver
+  // SetlistFmSyncService#syncTheWarning en la API) — null hasta la primera.
+  // Alimenta el badge "Actualizado" del historial de shows.
+  setlistsSyncedAt: string | null;
 }
 
 export interface ArtistFan {
