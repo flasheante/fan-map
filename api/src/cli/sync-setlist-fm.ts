@@ -3,7 +3,11 @@
 //   npm run sync:setlist-fm
 //
 // Not exposed as an HTTP endpoint by design (see AGENTS.md slice notes) —
-// this is an internal/manual operation for now, no cron/job runner yet.
+// this is an internal/manual operation for now, no cron/job runner yet
+// (besides the unattended weekly GitHub Actions cron — see
+// .github/workflows/sync-setlist-fm.yml — which is exactly why a 429 here
+// gets a few retries instead of just failing outright; see
+// setlist-fm-retry.ts).
 //
 // IMPORTANT: this must be run through `ts-node` (see the npm script), not
 // `tsx` or any other esbuild-based loader. This file correctly boots a real
@@ -18,6 +22,10 @@
 import 'dotenv/config';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from '../app.module';
+import {
+  DEFAULT_SETLIST_FM_RETRY_DELAYS_MS,
+  withSetlistFmRetry,
+} from '../integrations/setlist-fm/setlist-fm-retry';
 import { SetlistFmSyncService } from '../shows/setlist-fm-sync.service';
 
 async function main() {
@@ -29,9 +37,26 @@ async function main() {
     console.log('Starting Setlist.fm sync for The Warning');
 
     const syncService = app.get(SetlistFmSyncService);
-    const summary = await syncService.syncTheWarning({
-      onPageFetchStart: (page) => console.log(`Fetching page ${page}...`),
-    });
+    // syncTheWarning() itself never retries a 429 (see setlist-fm.client.ts
+    // and setlist-fm-sync.service.ts) — withSetlistFmRetry is the one layer
+    // that does, re-running the whole sync from scratch after a backoff.
+    // That's safe: nothing gets persisted until every page has fetched
+    // successfully, so a 429 partway through has nothing to duplicate on
+    // retry. See setlist-fm-retry.ts for why a 429 here usually isn't this
+    // run's own fault.
+    const summary = await withSetlistFmRetry(
+      () =>
+        syncService.syncTheWarning({
+          onPageFetchStart: (page) => console.log(`Fetching page ${page}...`),
+        }),
+      {
+        onRetry: (attempt, delayMs) =>
+          console.warn(
+            `setlist.fm rate-limited (429); retrying in ${Math.round(delayMs / 1000)}s ` +
+              `(attempt ${attempt}/${DEFAULT_SETLIST_FM_RETRY_DELAYS_MS.length})...`,
+          ),
+      },
+    );
 
     console.log('setlist.fm sync completed:');
     console.log(JSON.stringify(summary, null, 2));
