@@ -1,52 +1,50 @@
 # Fan Map
 
-Mapa mundial de fans de **The Warning**: cada fan se ubica en su ciudad, arma
-su perfil (setlist personal, top 10 de canciones favoritas, redes sociales) y
-puede ver el historial de shows y setlists reales de la banda, sincronizado
-automáticamente desde [setlist.fm](https://www.setlist.fm/) y
-[MusicBrainz](https://musicbrainz.org/).
+A world map of **The Warning** fans: each fan pins their city, builds a
+profile (personal setlist, top 10 favorite songs, social links), and can
+browse the band's real show/setlist history, synced automatically from
+[setlist.fm](https://www.setlist.fm/) and [MusicBrainz](https://musicbrainz.org/).
 
-## Resumen
+## Overview
 
-El repo tiene dos proyectos independientes (no es un monorepo con
-workspaces, cada uno tiene su propio `package.json`):
+The repo has two independent projects (not an npm-workspaces monorepo — each
+has its own `package.json`):
 
-| Carpeta | Qué es | Stack |
+| Folder | What it is | Stack |
 | --- | --- | --- |
-| [`api/`](api) | Backend REST | NestJS 11 + Prisma 7 + PostgreSQL |
-| [`web/`](web) | Frontend | Next.js 16 (App Router) + React 19 + Leaflet (mapa) + Tailwind |
+| [`api/`](api) | REST backend | NestJS 11 + Prisma 7 + PostgreSQL |
+| [`web/`](web) | Frontend | Next.js 16 (App Router) + React 19 + Leaflet (map) + Tailwind |
 
-### Funcionalidad principal
+### Main features
 
-- **Login con Google** (OAuth) y sesión por cookie firmada.
-- **Perfil de fan**: ciudad, nombre a mostrar, visibilidad en el mapa, hasta
-  5 redes sociales (cada una con su propio toggle de "pública").
-- **Setlist personal** (hasta 15 canciones, con orden) y **Top 10** de
-  canciones favoritas — independientes entre sí.
-- **Mapa de fans** por ciudad/país, con rankings de canciones favoritas
-  (mundial / país / ciudad) armados a partir de esos Top 10.
-- **Historial de shows y setlists de The Warning**, sincronizado desde
-  setlist.fm (`npm run sync:setlist-fm`, corre también solo cada semana vía
-  GitHub Actions — ver `.github/workflows/sync-setlist-fm.yml`).
-- **Catálogo de canciones** de la banda, sincronizado desde MusicBrainz
-  (`npm run sync:musicbrainz`), como fuente para el setlist/top 10 del fan.
+- **Google login** (OAuth) with a signed-cookie session.
+- **Fan profile**: city, display name, map visibility, up to 5 social links
+  (each with its own "public" toggle).
+- **Personal setlist** (up to 15 songs, ordered) and **top 10** favorite
+  songs — independent of each other.
+- **Fan map** by city/country, with favorite-song rankings (worldwide /
+  country / city) built from those top 10s.
+- **The Warning's show/setlist history**, synced from setlist.fm
+  (`npm run sync:setlist-fm`, also runs on its own weekly via GitHub Actions
+  — see `.github/workflows/sync-setlist-fm.yml`).
+- **Song catalog** for the band, synced from MusicBrainz
+  (`npm run sync:musicbrainz`), as the source for a fan's setlist/top 10.
 
-## Requisitos previos
+## Prerequisites
 
-- **Node.js 24** (la CI usa esa versión — ver `.github/workflows/`). Node 20+
-  debería andar igual para desarrollo local.
-- **Docker** (o una instancia propia de PostgreSQL 17 — ver más abajo si no
-  querés usar Docker).
-- Una cuenta de **Google Cloud** para crear credenciales OAuth (solo si vas a
-  probar el login; el resto de la app funciona sin esto).
-- Opcional, solo si vas a correr las sincronizaciones reales en vez de los
-  datos de prueba: una API key de
-  [setlist.fm](https://www.setlist.fm/settings/apps) (MusicBrainz no
-  necesita key).
+- **Node.js 24** (what CI uses — see `.github/workflows/`). Node 20+ should
+  work fine for local development too.
+- **Docker** (or your own PostgreSQL 17 instance — see below if you'd rather
+  not use Docker).
+- A **Google Cloud** account to create OAuth credentials (only needed to try
+  the login flow; the rest of the app works without it).
+- Optional, only if you want to run the real syncs instead of the sample
+  data: a [setlist.fm](https://www.setlist.fm/settings/apps) API key
+  (MusicBrainz needs no key).
 
-## Instalación
+## Installation
 
-### 1. Clonar y levantar la base de datos
+### 1. Clone and start the database
 
 ```bash
 git clone https://github.com/flasheante/fan-map.git
@@ -54,14 +52,13 @@ cd fan-map
 docker compose up -d
 ```
 
-Esto levanta Postgres 17 en `localhost:5432` (db/user/pass: `fan_map` /
-`fan_map` / `fan_map`, ver `docker-compose.yml`). También levanta un Redis en
-`localhost:6379`, incluido para uso futuro — hoy ningún servicio de la app lo
-usa todavía, así que no hace falta tenerlo corriendo para nada de lo de
-abajo.
+This starts Postgres 17 on `localhost:5432` (db/user/password: `fan_map` /
+`fan_map` / `fan_map`, see `docker-compose.yml`). It also starts a Redis on
+`localhost:6379`, included for future use — no service in the app uses it
+yet, so you don't need it running for anything below.
 
-Si preferís no usar Docker, cualquier Postgres 17 accesible sirve: solo
-necesitás su `DATABASE_URL` para el paso siguiente.
+If you'd rather not use Docker, any reachable Postgres 17 works: you just
+need its `DATABASE_URL` for the next step.
 
 ### 2. Backend (`api/`)
 
@@ -75,29 +72,27 @@ npx prisma db seed
 npm run start:dev
 ```
 
-- `npx prisma migrate dev` aplica las migraciones existentes (no crea una
-  nueva si no cambiaste el schema).
-- `npx prisma db seed` corre `prisma/seed.ts`: carga el catálogo de
-  países/ciudades que usa el resto de la app para resolver ubicaciones, y
-  crea el artista "The Warning" (`slug: the-warning`) — **sin este paso el
-  resto de la app no tiene ciudades para elegir ni artista para sincronizar
-  shows**.
-- La API queda escuchando en `http://localhost:3000` (`PORT` en `.env` para
-  cambiarlo).
+- `npx prisma migrate dev` applies the existing migrations (it won't create
+  a new one unless you changed the schema).
+- `npx prisma db seed` runs `prisma/seed.ts`: loads the country/city catalog
+  the rest of the app uses to resolve locations, and creates the "The
+  Warning" artist (`slug: the-warning`) — **without this step the rest of
+  the app has no cities to pick from and no artist to sync shows for**.
+- The API listens on `http://localhost:3000` (`PORT` in `.env` to change
+  it).
 
-Con eso ya podés correr la API y probar los endpoints que no dependen de
-datos reales de shows (perfiles, ciudades, países). Para tener shows,
-setlists y canciones sin necesitar las API keys reales, corré en su lugar
-(o además):
+At this point you can run the API and try the endpoints that don't depend on
+real show data (profiles, cities, countries). To have shows, setlists and
+songs without needing the real API keys, run this instead (or in addition):
 
 ```bash
 npm run seed:demo
 ```
 
-Carga datos de ejemplo de shows/setlists de The Warning directamente en la
-base, sin llamar a setlist.fm ni MusicBrainz. Para los datos reales en vez
-de los de ejemplo, completá `SETLIST_FM_API_KEY` en `.env` (ver el propio
-`.env.example` para cómo conseguirla) y corré:
+Loads sample The Warning shows/setlists straight into the database, without
+calling setlist.fm or MusicBrainz. For real data instead of the sample data,
+fill in `SETLIST_FM_API_KEY` in `.env` (see `.env.example` itself for how to
+get one) and run:
 
 ```bash
 npm run sync:musicbrainz
@@ -106,7 +101,7 @@ npm run sync:setlist-fm
 
 ### 3. Frontend (`web/`)
 
-En otra terminal:
+In another terminal:
 
 ```bash
 cd web
@@ -115,32 +110,32 @@ npm install
 npm run dev
 ```
 
-Queda en `http://localhost:3001` — abrilo ahí, no en el puerto de la API.
-`next.config.ts` proxea `/api/*` hacia `NEXT_PUBLIC_API_URL` (por defecto
-`http://localhost:3000`, la API del paso anterior) para que la cookie de
-sesión quede en el mismo origin que el frontend.
+It runs on `http://localhost:3001` — open it there, not on the API's port.
+`next.config.ts` proxies `/api/*` to `NEXT_PUBLIC_API_URL` (defaults to
+`http://localhost:3000`, the API from the previous step) so the session
+cookie stays on the same origin as the frontend.
 
-### 4. Login con Google (opcional)
+### 4. Google login (optional)
 
-El resto de la app funciona sin esto, pero `GET /auth/google` lo necesita:
+The rest of the app works without this, but `GET /auth/google` needs it:
 
-1. Creá un "OAuth client ID" (tipo *Web application*) en la
+1. Create an "OAuth client ID" (type *Web application*) in the
    [Google Cloud Console](https://console.cloud.google.com/apis/credentials).
-2. Agregalo como *Authorized redirect URI*:
-   `http://localhost:3001/api/auth/google/callback` (nota: el puerto del
-   **web**, no el de la API — ver el comentario de `GOOGLE_CALLBACK_URL` en
-   `api/.env.example` para el porqué).
-3. En `api/.env`, completá `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` y
-   `GOOGLE_CALLBACK_URL` con esa misma URL.
+2. Add this as an *Authorized redirect URI*:
+   `http://localhost:3001/api/auth/google/callback` (note: the **web**
+   app's port, not the API's — see the `GOOGLE_CALLBACK_URL` comment in
+   `api/.env.example` for why).
+3. In `api/.env`, fill in `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` and
+   `GOOGLE_CALLBACK_URL` with that same URL.
 
-## Variables de entorno
+## Environment variables
 
-Cada proyecto trae su propio ejemplo con explicaciones línea por línea — son
-la referencia real, esto es solo el resumen:
+Each project ships its own example file with line-by-line explanations —
+those are the real reference, this is just the summary:
 
-- [`api/.env.example`](api/.env.example): `DATABASE_URL`, claves de
-  setlist.fm/MusicBrainz, credenciales de Google OAuth, `SESSION_SECRET` y
-  el resto de la config de sesión.
+- [`api/.env.example`](api/.env.example): `DATABASE_URL`, setlist.fm/MusicBrainz
+  keys, Google OAuth credentials, `SESSION_SECRET` and the rest of the
+  session config.
 - [`web/.env.local.example`](web/.env.local.example): `NEXT_PUBLIC_API_URL`.
 
 ## Tests
@@ -148,34 +143,34 @@ la referencia real, esto es solo el resumen:
 ```bash
 # api
 cd api
-npm run test        # unitarios
-npm run test:e2e     # end-to-end (necesita la base de datos levantada)
-npm run test:cov     # con cobertura
+npm run test        # unit
+npm run test:e2e     # end-to-end (needs the database running)
+npm run test:cov     # with coverage
 
 # web
 cd web
 npm run test         # vitest
 ```
 
-## Deploy
+## Deployment
 
-No hay nada de infra en el repo (se configura directo en cada plataforma):
+There's no infra-as-code in the repo (each platform is configured directly):
 
 - **API**: [Render](https://render.com).
 - **Web**: [Vercel](https://vercel.com).
-- **Sync semanal de setlist.fm**: GitHub Actions
-  (`.github/workflows/sync-setlist-fm.yml`), corre los lunes de madrugada;
-  también se puede disparar a mano desde la pestaña *Actions* del repo.
+- **Weekly setlist.fm sync**: GitHub Actions
+  (`.github/workflows/sync-setlist-fm.yml`), runs early Monday mornings;
+  can also be triggered manually from the repo's *Actions* tab.
 
-## Estructura del repo
+## Repo structure
 
 ```
 fan-map/
-├── docker-compose.yml   # Postgres + Redis para desarrollo local
-├── api/                 # Backend NestJS (ver api/README.md — boilerplate de Nest)
-└── web/                 # Frontend Next.js (ver web/README.md — boilerplate de create-next-app)
+├── docker-compose.yml   # Postgres + Redis for local development
+├── api/                 # NestJS backend (see api/README.md — Nest boilerplate)
+└── web/                 # Next.js frontend (see web/README.md — create-next-app boilerplate)
 ```
 
-Los `README.md` dentro de `api/` y `web/` son los que genera cada framework
-por defecto (Nest CLI / `create-next-app`) y no están actualizados con nada
-específico de este proyecto — este archivo es la referencia real.
+The `README.md` files inside `api/` and `web/` are each framework's default
+(Nest CLI / `create-next-app`) and haven't been updated with anything
+project-specific — this file is the real reference.
