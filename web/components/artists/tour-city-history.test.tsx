@@ -20,6 +20,7 @@ vi.mock("@/components/artists/tour-map-loader", () => ({
 const MENDOZA_ID = "3fa85f64-5717-4562-b3fc-2c963f66afa6";
 const SHOW_A_ID = "b1e1a1a1-1111-4111-8111-111111111111";
 const SHOW_B_ID = "b2e2a2a2-2222-4222-8222-222222222222";
+const SHOW_C_ID = "b3e3a3a3-3333-4333-8333-333333333333";
 
 function makeArtist(overrides: Partial<Artist> = {}): Artist {
   return {
@@ -265,6 +266,80 @@ describe("TourCityHistory", () => {
       "href",
       `/artists/the-warning/shows/${SHOW_B_ID}`,
     );
+  });
+
+  // Etapa UX/navegación: el historial de una ciudad debe listar sus shows
+  // del más reciente al más antiguo, sin importar el orden en que lleguen
+  // (hoy la API los devuelve ascendente, ver ShowsService#findAllByArtist,
+  // pero esta lista no debe depender de ese detalle). Mismo criterio UTC
+  // (`new Date(...).getTime()`) que ya usan getTourCityDateRange/
+  // calculateTourStats para firstShow/lastShow.
+  it("orders the shows list from most recent to oldest, regardless of the order they arrive in", () => {
+    render(
+      <TourCityHistory
+        artist={makeArtist()}
+        city={makeCity()}
+        shows={[
+          makeShow({ id: SHOW_A_ID, date: "2024-06-10T00:00:00.000Z" }),
+          makeShow({ id: SHOW_B_ID, date: "2026-08-20T00:00:00.000Z" }),
+          makeShow({ id: SHOW_C_ID, date: "2025-11-14T00:00:00.000Z" }),
+        ]}
+      />,
+    );
+
+    const showLinks = screen
+      .getAllByRole("link")
+      .filter((link) => link.getAttribute("href")?.includes("/shows/"));
+
+    expect(showLinks.map((link) => link.getAttribute("href"))).toEqual([
+      `/artists/the-warning/shows/${SHOW_B_ID}`,
+      `/artists/the-warning/shows/${SHOW_C_ID}`,
+      `/artists/the-warning/shows/${SHOW_A_ID}`,
+    ]);
+  });
+
+  it("orders a single show without error", () => {
+    render(
+      <TourCityHistory
+        artist={makeArtist()}
+        city={makeCity()}
+        shows={[makeShow({ id: SHOW_A_ID, date: "2024-06-10T00:00:00.000Z" })]}
+      />,
+    );
+
+    const showLinks = screen
+      .getAllByRole("link")
+      .filter((link) => link.getAttribute("href")?.includes("/shows/"));
+
+    expect(showLinks).toHaveLength(1);
+    expect(showLinks[0]).toHaveAttribute(
+      "href",
+      `/artists/the-warning/shows/${SHOW_A_ID}`,
+    );
+  });
+
+  it("keeps ordering shows most-recent-first when they already arrive in a different order", () => {
+    render(
+      <TourCityHistory
+        artist={makeArtist()}
+        city={makeCity()}
+        shows={[
+          makeShow({ id: SHOW_C_ID, date: "2025-11-14T00:00:00.000Z" }),
+          makeShow({ id: SHOW_A_ID, date: "2024-06-10T00:00:00.000Z" }),
+          makeShow({ id: SHOW_B_ID, date: "2026-08-20T00:00:00.000Z" }),
+        ]}
+      />,
+    );
+
+    const showLinks = screen
+      .getAllByRole("link")
+      .filter((link) => link.getAttribute("href")?.includes("/shows/"));
+
+    expect(showLinks.map((link) => link.getAttribute("href"))).toEqual([
+      `/artists/the-warning/shows/${SHOW_B_ID}`,
+      `/artists/the-warning/shows/${SHOW_C_ID}`,
+      `/artists/the-warning/shows/${SHOW_A_ID}`,
+    ]);
   });
 
   it("shows an empty state when the city has no shows", () => {

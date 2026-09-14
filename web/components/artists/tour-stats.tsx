@@ -35,6 +35,40 @@ function showsLabel(count: number): string {
   return `${count} ${count === 1 ? "show" : "shows"}`;
 }
 
+// "Último show" es clickeable: lleva a su página de detalle
+// (/artists/the-warning/shows/:id, ver app/artists/the-warning/shows/
+// [showId]/page.tsx), que ya muestra el setlist — no hay una ruta de
+// setlist separada, así que no hace falta crear una segunda. Mismo bloque
+// label+valor que StatRow (ver su definición arriba), repetido acá en vez
+// de reusarlo tal cual porque StatRow envuelve `children` en un <span> y
+// acá necesitamos un <a> (next/link) con su propio layout/hover/focus — es
+// el único StatRow que se vuelve clickeable, así que no se generaliza el
+// resto por esto.
+function LastShowStatRow({ lastShow }: { lastShow: TourStatsData["lastShow"] }) {
+  if (!lastShow) {
+    return <StatRow label="Último show">{EMPTY_PLACEHOLDER}</StatRow>;
+  }
+
+  return (
+    <div className="flex flex-col gap-1">
+      <span className="font-warning text-xs font-bold uppercase tracking-wide text-zinc-400">
+        Último show
+      </span>
+      <Link
+        href={`/artists/the-warning/shows/${lastShow.id}`}
+        className="group -mx-2 -my-1 flex flex-col gap-0.5 rounded-md px-2 py-1 text-sm font-medium transition-colors hover:bg-zinc-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 focus-visible:ring-offset-2 focus-visible:ring-offset-black"
+      >
+        <span>
+          {formatShowDate(lastShow.date)} · {lastShow.city.name}
+        </span>
+        <span className="text-xs font-semibold uppercase tracking-wide text-zinc-400 underline underline-offset-2 group-hover:text-zinc-200">
+          Ver setlist →
+        </span>
+      </Link>
+    </div>
+  );
+}
+
 // Mitad "de arriba" del resumen estadístico del Tour Map (ver tour/page.tsx):
 // totales, primer/último show y los "con más shows" (país/ciudad/año). Se
 // muestra antes del mapa; TourStatsRankings (shows por año + ranking de
@@ -79,11 +113,7 @@ export function TourStatsSummary({ stats }: TourStatsProps) {
             ? `${formatShowDate(firstShow.date)} · ${firstShow.city.name}`
             : EMPTY_PLACEHOLDER}
         </StatRow>
-        <StatRow label="Último show">
-          {lastShow
-            ? `${formatShowDate(lastShow.date)} · ${lastShow.city.name}`
-            : EMPTY_PLACEHOLDER}
-        </StatRow>
+        <LastShowStatRow lastShow={lastShow} />
       </div>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <StatRow label="País con más shows">

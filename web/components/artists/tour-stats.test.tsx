@@ -214,6 +214,69 @@ describe("TourStatsSummary", () => {
     expect(container.textContent).not.toContain(MONTERREY_ID);
     expect(container.textContent).not.toContain(MENDOZA_ID);
   });
+
+  // Etapa UX/navegación (Fan Map): "Último show" debe llevar al detalle de
+  // ese show — la misma ruta canónica que ya usan ShowsList/TourStatsRankings
+  // (/artists/the-warning/shows/:id), que ya muestra el setlist. No hay una
+  // ruta de setlist separada (ver app/artists/the-warning/shows/[showId]/
+  // page.tsx), así que no hace falta una segunda. "Último show" es
+  // exactamente stats.lastShow — el mismo dato que ya usa esta sección, sin
+  // recalcularlo de otra forma.
+  describe("last show link", () => {
+    it("links the last show to its canonical show detail/setlist page", () => {
+      render(<TourStatsSummary stats={makeStats()} />);
+
+      const link = screen.getByRole("link", { name: /15 de agosto de 2026/i });
+      expect(link).toHaveAttribute(
+        "href",
+        `/artists/the-warning/shows/${SHOW_LAST_ID}`,
+      );
+    });
+
+    it("uses the real last show from stats.lastShow, not a different one", () => {
+      const otherShowId = "e5e5a5a5-5555-4555-8555-555555555555";
+      render(
+        <TourStatsSummary
+          stats={makeStats({
+            lastShow: makeShow({
+              id: otherShowId,
+              date: "2027-01-02T00:00:00.000Z",
+              city: {
+                id: "city-other",
+                name: "Other City",
+                latitude: 0,
+                longitude: 0,
+                country: { id: "country-other", name: "Otro país", code: "OT" },
+              },
+            }),
+          })}
+        />,
+      );
+
+      const link = screen.getByRole("link", { name: /2 de enero de 2027/i });
+      expect(link).toHaveAttribute(
+        "href",
+        `/artists/the-warning/shows/${otherShowId}`,
+      );
+    });
+
+    it("gives the link a discernible accessible name (basic accessibility)", () => {
+      render(<TourStatsSummary stats={makeStats()} />);
+
+      const link = screen.getByRole("link", { name: /15 de agosto de 2026/i });
+      expect(link.textContent?.trim().length).toBeGreaterThan(0);
+    });
+
+    it("does not render an invalid/empty last-show link when there is no last show", () => {
+      render(<TourStatsSummary stats={makeStats({ lastShow: null })} />);
+
+      const showLinks = screen
+        .queryAllByRole("link")
+        .filter((link) => link.getAttribute("href")?.includes("/shows/"));
+      expect(showLinks).toHaveLength(0);
+      expect(screen.getByText(/todavía no hay shows/i)).toBeInTheDocument();
+    });
+  });
 });
 
 describe("TourStatsRankings", () => {

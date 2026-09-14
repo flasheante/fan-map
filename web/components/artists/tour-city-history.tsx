@@ -60,6 +60,20 @@ export function TourCityHistory({ artist, city, shows }: TourCityHistoryProps) {
   // el mapa simplemente no se renderiza.
   const mapCities = groupShowsByCity(shows);
 
+  // El historial de la ciudad se lista del show más reciente al más
+  // antiguo. Ni la API (GET /artists/:artistId/shows ordena `date: 'asc'`,
+  // ver ShowsService#findAllByArtist) ni ShowsList (que renderiza tal cual
+  // recibe `shows`, ver shows-list.tsx) garantizan ese orden, así que se
+  // ordena acá una copia de `shows` antes de pasarla — sin mutar el array
+  // recibido, mismo criterio que getTourCityDateRange arriba. Mismo
+  // criterio UTC (`new Date(...).getTime()`) que ya usan
+  // getTourCityDateRange/calculateTourStats para firstShow/lastShow: no es
+  // un criterio nuevo, es el mismo comparador, sólo invertido (desc en vez
+  // de asc).
+  const showsByDateDesc = [...shows].sort(
+    (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
+  );
+
   return (
     <>
       <header className="flex flex-col gap-4 border-b border-zinc-800 px-4 py-4">
@@ -95,7 +109,7 @@ export function TourCityHistory({ artist, city, shows }: TourCityHistoryProps) {
           <TourMapLoader cities={mapCities} />
         </div>
       )}
-      <ShowsList shows={shows} />
+      <ShowsList shows={showsByDateDesc} />
     </>
   );
 }
