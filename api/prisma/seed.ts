@@ -1,5 +1,7 @@
 import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 const adapter = new PrismaPg({
   connectionString: process.env.DATABASE_URL!,
@@ -435,6 +437,34 @@ async function main() {
     },
   ];
 
+  // Worldwide catalog so fans from anywhere can pick their city, generated
+  // from GeoNames by scripts/generate-world-locations.ts. Tour data above
+  // wins on any overlap: a country already listed keeps its name, and a
+  // world city within MERGE_DISTANCE_KM of a tour city in the same country
+  // is treated as the same place under another spelling ('Bogotá' vs
+  // 'Bogota', 'New York City' vs 'New York') and skipped, so the
+  // setlist.fm spelling stays the only one.
+  const MERGE_DISTANCE_KM = 3;
+  const worldCountries = JSON.parse(
+    readFileSync(join(__dirname, 'data', 'world-locations.json'), 'utf8'),
+  ) as typeof countries;
+
+  for (const worldCountry of worldCountries) {
+    const tourCountry = countries.find((c) => c.code === worldCountry.code);
+    if (!tourCountry) {
+      countries.push(worldCountry);
+      continue;
+    }
+    for (const worldCity of worldCountry.cities) {
+      const isTourCity = tourCountry.cities.some(
+        (tourCity) =>
+          tourCity.name === worldCity.name ||
+          distanceKm(tourCity, worldCity) < MERGE_DISTANCE_KM,
+      );
+      if (!isTourCity) tourCountry.cities.push(worldCity);
+    }
+  }
+
   for (const countryData of countries) {
     const country = await prisma.country.upsert({
       where: {
@@ -478,6 +508,21 @@ async function main() {
   });
 
   console.log('Seed completed successfully');
+}
+
+type Coordinates = { latitude: number; longitude: number };
+
+// Great-circle (haversine) distance between two points, in kilometers.
+function distanceKm(a: Coordinates, b: Coordinates) {
+  const toRad = (deg: number) => (deg * Math.PI) / 180;
+  const dLat = toRad(b.latitude - a.latitude);
+  const dLon = toRad(b.longitude - a.longitude);
+  const h =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(a.latitude)) *
+      Math.cos(toRad(b.latitude)) *
+      Math.sin(dLon / 2) ** 2;
+  return 2 * 6371 * Math.asin(Math.sqrt(h));
 }
 
 main()
