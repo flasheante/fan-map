@@ -65,6 +65,7 @@ describe('LocationsService', () => {
       });
       expect(prisma.city.findMany).toHaveBeenCalledWith({
         where: { countryId: 'country-1' },
+        include: { region: { select: { id: true, name: true } } },
         orderBy: { name: 'asc' },
       });
       expect(result).toBe(cities);

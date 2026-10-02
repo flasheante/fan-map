@@ -41,8 +41,10 @@ describe('Shows (e2e)', () => {
 
     prisma = app.get(PrismaService);
 
+    // Lowercase hex on purpose: an uppercase code ('SA', 'SE'...) can clash
+    // with a real country from the seeded world catalog.
     const country = await prisma.country.create({
-      data: { name: countryName, code: `S${suffix.slice(0, 1).toUpperCase()}` },
+      data: { name: countryName, code: `S${suffix.slice(0, 1)}` },
     });
     countryId = country.id;
 
@@ -149,7 +151,11 @@ describe('Shows (e2e)', () => {
           name: cityName,
           latitude: 19.4326,
           longitude: -99.1332,
-          country: { id: countryId, name: countryName, code: expect.any(String) },
+          country: {
+            id: countryId,
+            name: countryName,
+            code: expect.any(String),
+          },
         },
       });
     });
@@ -215,7 +221,11 @@ describe('Shows (e2e)', () => {
           name: cityName,
           latitude: 19.4326,
           longitude: -99.1332,
-          country: { id: countryId, name: countryName, code: expect.any(String) },
+          country: {
+            id: countryId,
+            name: countryName,
+            code: expect.any(String),
+          },
         },
       });
     });
@@ -318,7 +328,11 @@ describe('Shows (e2e)', () => {
 
       await expect(
         prisma.setlistSong.create({
-          data: { setlistId: setlist.id, title: 'Invalid Position', position: 0 },
+          data: {
+            setlistId: setlist.id,
+            title: 'Invalid Position',
+            position: 0,
+          },
         }),
       ).rejects.toThrow();
     });

@@ -18,6 +18,7 @@ describe('Locations (e2e)', () => {
 
   let countryWithCitiesId: string;
   let countryWithoutCitiesId: string;
+  let regionId: string;
 
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
@@ -39,6 +40,15 @@ describe('Locations (e2e)', () => {
     });
     countryWithoutCitiesId = countryWithoutCities.id;
 
+    const region = await prisma.region.create({
+      data: {
+        name: `Region ${suffix}`,
+        code: '01',
+        countryId: countryWithCitiesId,
+      },
+    });
+    regionId = region.id;
+
     // Inserted out of alphabetical order on purpose.
     await prisma.city.createMany({
       data: [
@@ -48,6 +58,7 @@ describe('Locations (e2e)', () => {
           countryId: countryWithCitiesId,
           latitude: -34.6037,
           longitude: -58.3816,
+          regionId,
         },
         { name: `Cordoba ${suffix}`, countryId: countryWithCitiesId },
       ],
@@ -56,6 +67,9 @@ describe('Locations (e2e)', () => {
 
   afterAll(async () => {
     await prisma.city.deleteMany({ where: { countryId: countryWithCitiesId } });
+    await prisma.region.deleteMany({
+      where: { countryId: countryWithCitiesId },
+    });
     await prisma.country.deleteMany({
       where: { id: { in: [countryWithCitiesId, countryWithoutCitiesId] } },
     });
@@ -125,6 +139,33 @@ describe('Locations (e2e)', () => {
 
       expect(rosario.latitude).toBeNull();
       expect(rosario.longitude).toBeNull();
+    });
+
+    it('returns the region id and name for a city that has one', async () => {
+      const response = await request(app.getHttpServer())
+        .get(`/countries/${countryWithCitiesId}/cities`)
+        .expect(200);
+
+      const buenosAires = response.body.find(
+        (city: { name: string }) => city.name === `Buenos Aires ${suffix}`,
+      );
+
+      expect(buenosAires.region).toEqual({
+        id: regionId,
+        name: `Region ${suffix}`,
+      });
+    });
+
+    it('returns a null region for a city without one', async () => {
+      const response = await request(app.getHttpServer())
+        .get(`/countries/${countryWithCitiesId}/cities`)
+        .expect(200);
+
+      const rosario = response.body.find(
+        (city: { name: string }) => city.name === `Rosario ${suffix}`,
+      );
+
+      expect(rosario.region).toBeNull();
     });
 
     it('returns an empty array for a country with no cities', async () => {

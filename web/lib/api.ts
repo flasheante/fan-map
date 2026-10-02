@@ -102,13 +102,21 @@ export interface ArtistTopSong {
   timesPlayed: number;
 }
 
+// Provincia/estado de una ciudad (ver Region en el schema del backend).
+export interface Region {
+  id: string;
+  name: string;
+}
+
 // Shape devuelto por GET /countries/:countryId/cities (ver
 // CitiesController): la ciudad "plana", sin el país anidado que sí trae
-// ArtistFan.city / FanProfile.city.
+// ArtistFan.city / FanProfile.city, pero con su provincia/estado (null si
+// la ciudad no tiene una — ver lib/locations.ts).
 export interface CityOption {
   id: string;
   name: string;
   countryId: string;
+  region: Region | null;
 }
 
 export interface FanProfileArtist {

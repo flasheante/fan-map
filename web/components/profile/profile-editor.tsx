@@ -17,6 +17,11 @@ import {
   type FanProfile,
   type SongListItemInput,
 } from "@/lib/api";
+import {
+  filterCitiesByRegion,
+  getRegionIdForCity,
+  getRegionOptions,
+} from "@/lib/locations";
 import { findArtistBySlug, THE_WARNING_SLUG } from "@/lib/the-warning-fan-map";
 import { SongListEditor } from "./song-list-editor";
 import { SocialLinksEditor, type SocialLinksValue } from "./social-links-editor";
@@ -80,7 +85,15 @@ export function ProfileEditor() {
   const [countryId, setCountryId] = useState("");
   const [cities, setCities] = useState<CityOption[]>([]);
   const [citiesStatus, setCitiesStatus] = useState<CitiesStatus>("idle");
+  const [regionId, setRegionId] = useState("");
   const [cityId, setCityId] = useState("");
+  // Mismo criterio que FanForm: con provincias/estados, la ciudad se elige
+  // dentro de la provincia/estado elegida (ver lib/locations.ts).
+  const regions = getRegionOptions(cities);
+  const hasRegions = regions.length > 0;
+  const visibleCities = hasRegions
+    ? filterCitiesByRegion(cities, regionId)
+    : cities;
   const [showOnMap, setShowOnMap] = useState(false);
   const [selectedArtistIds, setSelectedArtistIds] = useState<string[]>([]);
   // Dos estados completamente separados — nunca se leen ni se escriben
@@ -120,6 +133,7 @@ export function ProfileEditor() {
       getCities(country.id)
         .then((loadedCities) => {
           setCities(loadedCities);
+          setRegionId(getRegionIdForCity(loadedCities, loaded.city.id));
           setCitiesStatus("loaded");
         })
         .catch(() => setCitiesStatus("error"));
@@ -164,8 +178,14 @@ export function ProfileEditor() {
     };
   }, []);
 
+  function handleRegionChange(newRegionId: string) {
+    setRegionId(newRegionId);
+    setCityId("");
+  }
+
   function handleCountryChange(newCountryId: string) {
     setCountryId(newCountryId);
+    setRegionId("");
     setCityId("");
     setCities([]);
     if (!newCountryId) {
@@ -305,6 +325,27 @@ export function ProfileEditor() {
         </select>
       </div>
 
+      {hasRegions && (
+        <div className="flex flex-col gap-1">
+          <label htmlFor="profile-region" className={labelClass}>
+            Provincia / Estado
+          </label>
+          <select
+            id="profile-region"
+            className={inputClass}
+            value={regionId}
+            onChange={(e) => handleRegionChange(e.target.value)}
+          >
+            <option value="">Seleccioná una provincia o estado</option>
+            {regions.map((region) => (
+              <option key={region.id} value={region.id}>
+                {region.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
       <div className="flex flex-col gap-1">
         <label htmlFor="profile-city" className={labelClass}>
           Ciudad
@@ -313,7 +354,11 @@ export function ProfileEditor() {
           id="profile-city"
           className={inputClass}
           value={cityId}
-          disabled={!countryId || citiesStatus === "loading"}
+          disabled={
+            !countryId ||
+            citiesStatus === "loading" ||
+            (hasRegions && !regionId)
+          }
           onChange={(e) => setCityId(e.target.value)}
         >
           <option value="">
@@ -321,9 +366,11 @@ export function ProfileEditor() {
               ? "Seleccioná un país primero"
               : citiesStatus === "loading"
                 ? "Cargando ciudades..."
-                : "Seleccioná una ciudad"}
+                : hasRegions && !regionId
+                  ? "Seleccioná una provincia o estado primero"
+                  : "Seleccioná una ciudad"}
           </option>
-          {cities.map((city) => (
+          {visibleCities.map((city) => (
             <option key={city.id} value={city.id}>
               {city.name}
             </option>

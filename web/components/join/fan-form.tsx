@@ -11,6 +11,7 @@ import {
   type CityOption,
   type Country,
 } from "@/lib/api";
+import { filterCitiesByRegion, getRegionOptions } from "@/lib/locations";
 import { findArtistBySlug, THE_WARNING_SLUG } from "@/lib/the-warning-fan-map";
 
 type LoadStatus = "loading" | "error" | "ready";
@@ -20,6 +21,7 @@ type SubmitStatus = "idle" | "submitting" | "error" | "success";
 interface FormErrors {
   displayName?: string;
   country?: string;
+  region?: string;
   city?: string;
   artists?: string;
 }
@@ -33,7 +35,17 @@ export function FanForm() {
   const [countryId, setCountryId] = useState("");
   const [cities, setCities] = useState<CityOption[]>([]);
   const [citiesStatus, setCitiesStatus] = useState<CitiesStatus>("idle");
+  const [regionId, setRegionId] = useState("");
   const [cityId, setCityId] = useState("");
+
+  // Si el país tiene provincias/estados, primero se elige una y la lista de
+  // ciudades se filtra por ella; si no (p. ej. Singapur), se elige la
+  // ciudad directo. Ver lib/locations.ts.
+  const regions = getRegionOptions(cities);
+  const hasRegions = regions.length > 0;
+  const visibleCities = hasRegions
+    ? filterCitiesByRegion(cities, regionId)
+    : cities;
 
   const [displayName, setDisplayName] = useState("");
   const [selectedArtistIds, setSelectedArtistIds] = useState<string[]>([]);
@@ -76,9 +88,10 @@ export function FanForm() {
 
   function handleCountryChange(newCountryId: string) {
     setCountryId(newCountryId);
+    setRegionId("");
     setCityId("");
     setCities([]);
-    setErrors((prev) => ({ ...prev, city: undefined }));
+    setErrors((prev) => ({ ...prev, region: undefined, city: undefined }));
 
     if (!newCountryId) {
       setCitiesStatus("idle");
@@ -106,6 +119,12 @@ export function FanForm() {
     }
   }, [submitStatus, router]);
 
+  function handleRegionChange(newRegionId: string) {
+    setRegionId(newRegionId);
+    setCityId("");
+    setErrors((prev) => ({ ...prev, region: undefined }));
+  }
+
   function toggleArtist(artistId: string) {
     setSelectedArtistIds((prev) =>
       prev.includes(artistId)
@@ -121,6 +140,9 @@ export function FanForm() {
     }
     if (!countryId) {
       nextErrors.country = "Elegí tu país.";
+    }
+    if (hasRegions && !regionId) {
+      nextErrors.region = "Elegí tu provincia o estado.";
     }
     if (!cityId) {
       nextErrors.city = "Elegí tu ciudad.";
@@ -230,6 +252,32 @@ export function FanForm() {
         )}
       </div>
 
+      {hasRegions && (
+        <div className="flex flex-col gap-1">
+          <label htmlFor="region" className={labelClass}>
+            Provincia / Estado
+          </label>
+          <select
+            id="region"
+            className={inputClass}
+            value={regionId}
+            onChange={(e) => handleRegionChange(e.target.value)}
+          >
+            <option value="">Seleccioná una provincia o estado</option>
+            {regions.map((region) => (
+              <option key={region.id} value={region.id}>
+                {region.name}
+              </option>
+            ))}
+          </select>
+          {errors.region && (
+            <p role="alert" className={errorClass}>
+              {errors.region}
+            </p>
+          )}
+        </div>
+      )}
+
       <div className="flex flex-col gap-1">
         <label htmlFor="city" className={labelClass}>
           Ciudad
@@ -243,7 +291,11 @@ export function FanForm() {
             id="city"
             className={inputClass}
             value={cityId}
-            disabled={!countryId || citiesStatus === "loading"}
+            disabled={
+              !countryId ||
+              citiesStatus === "loading" ||
+              (hasRegions && !regionId)
+            }
             onChange={(e) => setCityId(e.target.value)}
           >
             <option value="">
@@ -251,9 +303,11 @@ export function FanForm() {
                 ? "Seleccioná un país primero"
                 : citiesStatus === "loading"
                   ? "Cargando ciudades..."
-                  : "Seleccioná una ciudad"}
+                  : hasRegions && !regionId
+                    ? "Seleccioná una provincia o estado primero"
+                    : "Seleccioná una ciudad"}
             </option>
-            {cities.map((city) => (
+            {visibleCities.map((city) => (
               <option key={city.id} value={city.id}>
                 {city.name}
               </option>

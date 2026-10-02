@@ -380,3 +380,115 @@ describe("FanForm", () => {
     expect(screen.queryByText("profile-1")).not.toBeInTheDocument();
   });
 });
+
+describe("FanForm with provinces/states", () => {
+  const argentina: Country = { id: "country-ar", name: "Argentina", code: "AR" };
+  const buenosAiresProvince = { id: "region-ba", name: "Buenos Aires" };
+  const cordobaProvince = { id: "region-cba", name: "Córdoba" };
+  const laPlata = {
+    id: "city-lp",
+    name: "La Plata",
+    countryId: argentina.id,
+    region: buenosAiresProvince,
+  };
+  const cordoba = {
+    id: "city-cba",
+    name: "Córdoba",
+    countryId: argentina.id,
+    region: cordobaProvince,
+  };
+
+  beforeEach(() => {
+    getCountries.mockResolvedValue([argentina, mexico]);
+    getCities.mockImplementation((countryId: string) => {
+      if (countryId === argentina.id) return Promise.resolve([laPlata, cordoba]);
+      if (countryId === mexico.id) return Promise.resolve([monterrey, cdmx]);
+      return Promise.resolve([]);
+    });
+  });
+
+  async function selectArgentina() {
+    fireEvent.change(screen.getByLabelText(/país/i), {
+      target: { value: argentina.id },
+    });
+    return screen.findByLabelText(/provincia/i);
+  }
+
+  it("asks for the province/state before the city and only lists its cities", async () => {
+    await renderReadyForm();
+    const regionSelect = await selectArgentina();
+
+    expect(within(regionSelect).getByText("Buenos Aires")).toBeInTheDocument();
+    expect(within(regionSelect).getByText("Córdoba")).toBeInTheDocument();
+    expect(screen.getByLabelText(/ciudad/i)).toBeDisabled();
+
+    fireEvent.change(regionSelect, { target: { value: buenosAiresProvince.id } });
+
+    const citySelect = screen.getByLabelText(/ciudad/i);
+    expect(citySelect).toBeEnabled();
+    expect(within(citySelect).getByText("La Plata")).toBeInTheDocument();
+    expect(within(citySelect).queryByText("Córdoba")).not.toBeInTheDocument();
+  });
+
+  it("clears the selected city when the province/state changes", async () => {
+    await renderReadyForm();
+    const regionSelect = await selectArgentina();
+    fireEvent.change(regionSelect, { target: { value: buenosAiresProvince.id } });
+    fireEvent.change(screen.getByLabelText(/ciudad/i), {
+      target: { value: laPlata.id },
+    });
+
+    fireEvent.change(regionSelect, { target: { value: cordobaProvince.id } });
+
+    expect((screen.getByLabelText(/ciudad/i) as HTMLSelectElement).value).toBe("");
+  });
+
+  it("shows a validation error when no province/state is selected", async () => {
+    await renderReadyForm();
+    fillValidForm();
+    await selectArgentina();
+
+    fireEvent.click(screen.getByRole("button", { name: /crear perfil/i }));
+
+    expect(
+      await screen.findByText(/elegí tu provincia o estado/i),
+    ).toBeInTheDocument();
+    expect(createFanProfile).not.toHaveBeenCalled();
+  });
+
+  it("submits the city chosen inside the province/state", async () => {
+    createFanProfile.mockResolvedValue({ id: "profile-1" });
+    await renderReadyForm();
+    fillValidForm();
+    const regionSelect = await selectArgentina();
+    fireEvent.change(regionSelect, { target: { value: cordobaProvince.id } });
+    fireEvent.change(screen.getByLabelText(/ciudad/i), {
+      target: { value: cordoba.id },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /crear perfil/i }));
+
+    await waitFor(() =>
+      expect(createFanProfile).toHaveBeenCalledWith(
+        expect.objectContaining({ cityId: cordoba.id }),
+      ),
+    );
+  });
+
+  it("hides the province/state step for a country whose cities have no region", async () => {
+    await renderReadyForm();
+    await selectArgentina();
+
+    fireEvent.change(screen.getByLabelText(/país/i), {
+      target: { value: mexico.id },
+    });
+
+    await waitFor(() =>
+      expect(screen.queryByLabelText(/provincia/i)).not.toBeInTheDocument(),
+    );
+    const citySelect = screen.getByLabelText(/ciudad/i);
+    await waitFor(() =>
+      expect(within(citySelect).getByText("Monterrey")).toBeInTheDocument(),
+    );
+  });
+});
