@@ -444,25 +444,42 @@ async function main() {
   // is treated as the same place under another spelling ('Bogotá' vs
   // 'Bogota', 'New York City' vs 'New York') and skipped, so the
   // setlist.fm spelling stays the only one.
+  //
+  // World cities are inserted in bulk per country (createMany +
+  // skipDuplicates) instead of one upsert each: there are ~6k of them and
+  // per-row round trips to a remote database take over an hour. The
+  // trade-off is that re-running the seed won't update their coordinates.
   const MERGE_DISTANCE_KM = 3;
   const worldCountries = JSON.parse(
     readFileSync(join(__dirname, 'data', 'world-locations.json'), 'utf8'),
   ) as typeof countries;
+  const worldCitiesByCode = new Map<
+    string,
+    (typeof countries)[number]['cities']
+  >();
 
   for (const worldCountry of worldCountries) {
-    const tourCountry = countries.find((c) => c.code === worldCountry.code);
+    let tourCountry = countries.find((c) => c.code === worldCountry.code);
     if (!tourCountry) {
-      countries.push(worldCountry);
-      continue;
+      tourCountry = {
+        name: worldCountry.name,
+        code: worldCountry.code,
+        cities: [],
+      };
+      countries.push(tourCountry);
     }
-    for (const worldCity of worldCountry.cities) {
-      const isTourCity = tourCountry.cities.some(
-        (tourCity) =>
-          tourCity.name === worldCity.name ||
-          distanceKm(tourCity, worldCity) < MERGE_DISTANCE_KM,
-      );
-      if (!isTourCity) tourCountry.cities.push(worldCity);
-    }
+    const tourCities = tourCountry.cities;
+    worldCitiesByCode.set(
+      worldCountry.code,
+      worldCountry.cities.filter(
+        (worldCity) =>
+          !tourCities.some(
+            (tourCity) =>
+              tourCity.name === worldCity.name ||
+              distanceKm(tourCity, worldCity) < MERGE_DISTANCE_KM,
+          ),
+      ),
+    );
   }
 
   for (const countryData of countries) {
@@ -499,6 +516,14 @@ async function main() {
         },
       });
     }
+
+    await prisma.city.createMany({
+      data: (worldCitiesByCode.get(countryData.code) ?? []).map((city) => ({
+        ...city,
+        countryId: country.id,
+      })),
+      skipDuplicates: true,
+    });
   }
 
   await prisma.artist.upsert({
