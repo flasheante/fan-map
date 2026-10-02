@@ -37,12 +37,28 @@ model Session {
 }
 
 model Country {
-  id     String @id @default(uuid())
-  name   String
-  code   String @unique
-  cities City[]
+  id      String   @id @default(uuid())
+  name    String
+  code    String   @unique
+  cities  City[]
+  regions Region[]
 
   @@map("countries")
+}
+
+// Provincia/estado: división administrativa de primer nivel de GeoNames
+// ("admin1"). code es el código admin1 de GeoNames, único dentro del país.
+model Region {
+  id        String  @id @default(uuid())
+  name      String
+  code      String
+  countryId String
+  country   Country @relation(fields: [countryId], references: [id])
+  cities    City[]
+
+  @@unique([countryId, code])
+  @@index([countryId])
+  @@map("regions")
 }
 
 model City {
@@ -51,12 +67,17 @@ model City {
   countryId   String
   latitude    Float?
   longitude   Float?
+  // Opcional: las ciudades del seed siempre tienen región, pero las que
+  // crean los tests (o cualquiera cargada a mano) pueden no tenerla.
+  regionId    String?
   country     Country      @relation(fields: [countryId], references: [id])
+  region      Region?      @relation(fields: [regionId], references: [id])
   fanProfiles FanProfile[]
   shows       Show[]
 
   @@unique([countryId, name])
   @@index([countryId])
+  @@index([regionId])
   @@map("cities")
 }
 

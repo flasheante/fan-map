@@ -272,3 +272,79 @@ describe("ProfileEditor", () => {
     expect(updateFanProfile).not.toHaveBeenCalled();
   });
 });
+
+describe("ProfileEditor with provinces/states", () => {
+  const argentina: Country = { id: "country-ar", name: "Argentina", code: "AR" };
+  const buenosAiresProvince = { id: "region-ba", name: "Buenos Aires" };
+  const cordobaProvince = { id: "region-cba", name: "Córdoba" };
+  const laPlata = {
+    id: "city-lp",
+    name: "La Plata",
+    countryId: argentina.id,
+    region: buenosAiresProvince,
+  };
+  const cordoba = {
+    id: "city-cba",
+    name: "Córdoba",
+    countryId: argentina.id,
+    region: cordobaProvince,
+  };
+  const profileInLaPlata = makeProfile({
+    city: {
+      id: laPlata.id,
+      name: laPlata.name,
+      latitude: -34.92,
+      longitude: -57.95,
+      country: argentina,
+    },
+  });
+
+  beforeEach(() => {
+    getCountries.mockResolvedValue([argentina, mexico]);
+    getCities.mockImplementation((countryId: string) =>
+      Promise.resolve(countryId === argentina.id ? [laPlata, cordoba] : [monterrey]),
+    );
+  });
+
+  it("preselects the province/state of the saved city and only lists its cities", async () => {
+    await renderReady(profileInLaPlata);
+
+    const regionSelect = (await screen.findByLabelText(/provincia/i)) as HTMLSelectElement;
+    await waitFor(() => expect(regionSelect.value).toBe(buenosAiresProvince.id));
+
+    const citySelect = screen.getByLabelText(/ciudad/i) as HTMLSelectElement;
+    expect(citySelect.value).toBe(laPlata.id);
+    expect(within(citySelect).queryByText("Córdoba")).not.toBeInTheDocument();
+  });
+
+  it("saves a city picked from another province/state", async () => {
+    updateFanProfile.mockResolvedValue(profileInLaPlata);
+    await renderReady(profileInLaPlata);
+    const regionSelect = await screen.findByLabelText(/provincia/i);
+
+    fireEvent.change(regionSelect, { target: { value: cordobaProvince.id } });
+    expect((screen.getByLabelText(/ciudad/i) as HTMLSelectElement).value).toBe("");
+    fireEvent.change(screen.getByLabelText(/ciudad/i), {
+      target: { value: cordoba.id },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /guardar/i }));
+
+    await waitFor(() =>
+      expect(updateFanProfile).toHaveBeenCalledWith(
+        profileInLaPlata.id,
+        expect.objectContaining({ cityId: cordoba.id }),
+      ),
+    );
+  });
+
+  it("hides the province/state step when the country's cities have no region", async () => {
+    await renderReady();
+
+    await waitFor(() =>
+      expect((screen.getByLabelText(/ciudad/i) as HTMLSelectElement).value).toBe(
+        monterrey.id,
+      ),
+    );
+    expect(screen.queryByLabelText(/provincia/i)).not.toBeInTheDocument();
+  });
+});

@@ -25,6 +25,7 @@ function makeCity(overrides: Partial<City> & { country: Country }): TourShow['ci
     countryId: country.id,
     latitude: null,
     longitude: null,
+    regionId: null,
     ...cityOverrides,
     country,
   };

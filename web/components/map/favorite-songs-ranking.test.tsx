@@ -14,7 +14,12 @@ const { FavoriteSongsRanking } = await import("./favorite-songs-ranking");
 
 const mexico: Country = { id: "country-mx", name: "Mexico", code: "MX" };
 const argentina: Country = { id: "country-ar", name: "Argentina", code: "AR" };
-const monterrey: CityOption = { id: "city-mty", name: "Monterrey", countryId: mexico.id };
+const monterrey: CityOption = {
+  id: "city-mty",
+  name: "Monterrey",
+  countryId: mexico.id,
+  region: null,
+};
 
 const worldwideRanking: FavoriteSongRankingEntry[] = [
   { songId: "song-more", title: "MORE", albumTitle: "ERROR", count: 1284 },

@@ -11,6 +11,9 @@ export class LocationsService {
     });
   }
 
+  // Each city carries its region (province/state) so the client can build
+  // the region picker and filter cities by it without another request.
+  // region is null for cities without one (see City.regionId).
   async findCitiesByCountryId(countryId: string) {
     const country = await this.prisma.country.findUnique({
       where: { id: countryId },
@@ -22,6 +25,7 @@ export class LocationsService {
 
     return this.prisma.city.findMany({
       where: { countryId },
+      include: { region: { select: { id: true, name: true } } },
       orderBy: { name: 'asc' },
     });
   }
