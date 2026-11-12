@@ -95,21 +95,10 @@ describe("TheWarningTourCityPage", () => {
     expect(getTheWarningTourCityData).toHaveBeenCalledWith("city-1");
   });
 
-  it("shows an error message when the data could not be loaded", async () => {
-    await renderPage("city-1", { status: "error" });
-
-    expect(
-      screen.getByText(/no pudimos cargar el historial/i),
-    ).toBeInTheDocument();
-    expect(screen.queryByTestId("tour-city-history")).not.toBeInTheDocument();
-  });
-
-  it("offers a way back to the Tour Map when the data could not be loaded", async () => {
-    await renderPage("city-1", { status: "error" });
-
-    expect(
-      screen.getByRole("link", { name: /volver al tour map/i }),
-    ).toHaveAttribute("href", "/artists/the-warning/tour");
+  it("throws (so ISR keeps serving the last good page) when the data could not be loaded", async () => {
+    await expect(renderPage("city-1", { status: "error" })).rejects.toThrow(
+      /no pudimos cargar el historial de shows/i,
+    );
   });
 
   it("shows a not-found state when The Warning doesn't exist", async () => {

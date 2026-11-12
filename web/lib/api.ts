@@ -21,6 +21,17 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000";
 // que siguen usando API_URL tal cual.
 const SESSION_API_URL = "/api";
 
+// Datos públicos (artista, shows, stats, fans del mapa, setlists) que leen
+// las páginas de /artists/the-warning y /map desde el servidor: se cachean
+// en el Data Cache de Next (stale-while-revalidate) en vez de no-store. La
+// API vive en el plan free de Render, que se duerme tras 15 min sin tráfico
+// y tarda ~30-60 s en despertar; con no-store cada visita pagaba ese cold
+// start. Así sólo lo paga la regeneración en background. 5 min alcanza: los
+// shows cambian una vez por semana (sync de setlist.fm) y el conteo de fans
+// puede ir un poco atrasado. En el browser (fan-form, fan-map, etc.) la
+// opción `next` se ignora, así que esos llamados no cambian.
+export const PUBLIC_REVALIDATE_SECONDS = 300;
+
 export interface Country {
   id: string;
   name: string;
@@ -259,7 +270,9 @@ export interface CurrentUser {
 }
 
 export async function getArtists(): Promise<Artist[]> {
-  const res = await fetch(`${API_URL}/artists`, { cache: "no-store" });
+  const res = await fetch(`${API_URL}/artists`, {
+    next: { revalidate: PUBLIC_REVALIDATE_SECONDS },
+  });
 
   if (!res.ok) {
     throw new Error(`Failed to fetch artists: ${res.status}`);
@@ -506,7 +519,7 @@ export async function getArtistFans(
   artistId: string,
 ): Promise<ArtistFansResponse> {
   const res = await fetch(`${API_URL}/artists/${artistId}/fans?onMap=true`, {
-    cache: "no-store",
+    next: { revalidate: PUBLIC_REVALIDATE_SECONDS },
   });
 
   if (!res.ok) {
@@ -518,7 +531,7 @@ export async function getArtistFans(
 
 export async function getArtistShows(artistId: string): Promise<ArtistShow[]> {
   const res = await fetch(`${API_URL}/artists/${artistId}/shows`, {
-    cache: "no-store",
+    next: { revalidate: PUBLIC_REVALIDATE_SECONDS },
   });
 
   if (!res.ok) {
@@ -530,7 +543,7 @@ export async function getArtistShows(artistId: string): Promise<ArtistShow[]> {
 
 export async function getArtistStats(artistId: string): Promise<ArtistStats> {
   const res = await fetch(`${API_URL}/artists/${artistId}/stats`, {
-    cache: "no-store",
+    next: { revalidate: PUBLIC_REVALIDATE_SECONDS },
   });
 
   if (!res.ok) {
@@ -544,7 +557,7 @@ export async function getArtistTopSongs(
   artistId: string,
 ): Promise<ArtistTopSong[]> {
   const res = await fetch(`${API_URL}/artists/${artistId}/stats/songs`, {
-    cache: "no-store",
+    next: { revalidate: PUBLIC_REVALIDATE_SECONDS },
   });
 
   if (!res.ok) {
@@ -568,7 +581,7 @@ export async function getArtistShow(
   showId: string,
 ): Promise<ArtistShow> {
   const res = await fetch(`${API_URL}/artists/${artistId}/shows/${showId}`, {
-    cache: "no-store",
+    next: { revalidate: PUBLIC_REVALIDATE_SECONDS },
   });
 
   if (!res.ok) {
@@ -587,7 +600,7 @@ export async function getShowSetlist(
 ): Promise<ShowSetlist> {
   const res = await fetch(
     `${API_URL}/artists/${artistId}/shows/${showId}/setlist`,
-    { cache: "no-store" },
+    { next: { revalidate: PUBLIC_REVALIDATE_SECONDS } },
   );
 
   if (!res.ok) {

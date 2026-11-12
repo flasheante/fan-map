@@ -68,21 +68,10 @@ describe("TourMapPage", () => {
     expect(getTheWarningTourMapData).toHaveBeenCalledTimes(1);
   });
 
-  it("shows an error message when the data could not be loaded", async () => {
-    await renderPage({ status: "error" });
-
-    expect(
-      screen.getByText(/no pudimos cargar el tour map/i),
-    ).toBeInTheDocument();
-    expect(screen.queryByTestId("tour-explorer")).not.toBeInTheDocument();
-  });
-
-  it("offers a way back to the artist page when the data could not be loaded", async () => {
-    await renderPage({ status: "error" });
-
-    expect(
-      screen.getByRole("link", { name: /volver a the warning/i }),
-    ).toHaveAttribute("href", "/artists/the-warning");
+  it("throws (so ISR keeps serving the last good page) when the data could not be loaded", async () => {
+    await expect(renderPage({ status: "error" })).rejects.toThrow(
+      /no pudimos cargar el tour map/i,
+    );
   });
 
   it("shows a not-found message when The Warning is not in the artists list", async () => {
