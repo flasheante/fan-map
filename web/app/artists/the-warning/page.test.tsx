@@ -433,49 +433,13 @@ describe("TheWarningArtistPage", () => {
     expect(screen.getByTestId("tour-explorer")).toBeInTheDocument();
   });
 
-  it("renders a working CTA linking to /join when not authenticated", async () => {
+  // La navegación (Historial de shows / Fan Map / Perfil) la da el header
+  // del sitio (ver components/site-header.test.tsx); la página ya no tiene
+  // menú propio, así no hay dos menús con nombres distintos.
+  it("does not render its own navigation menu", async () => {
     await renderPage({ status: "ok", artist: makeArtist(), fans: [] });
 
-    const cta = screen.getByRole("link", { name: /join the fanmap/i });
-    expect(cta).toHaveAttribute("href", "/join");
-  });
-
-  // Pedido: logueado, el CTA cambia de "Join the FanMap" a "Profile".
-  it("renders a CTA linking to /profile instead of /join when authenticated", async () => {
-    useAuth.mockReturnValue({
-      status: "authenticated",
-      user: { id: "user-1", email: "fan@example.com" },
-      logout: vi.fn(),
-    });
-
-    await renderPage({ status: "ok", artist: makeArtist(), fans: [] });
-
-    const cta = screen.getByRole("link", { name: /^profile$/i });
-    expect(cta).toHaveAttribute("href", "/profile");
-    expect(screen.queryByRole("link", { name: /join the fanmap/i })).not.toBeInTheDocument();
-  });
-
-  it("renders a working CTA linking to the show history", async () => {
-    await renderPage({ status: "ok", artist: makeArtist(), fans: [] });
-
-    const cta = screen.getByRole("link", {
-      name: /historial de shows/i,
-    });
-    expect(cta).toHaveAttribute(
-      "href",
-      "/artists/the-warning/tour",
-    );
-  });
-
-  // Etapa G, requisito 5: aunque el mapa que se ve por defecto acá sea el
-  // Historial (TourExplorer), tiene que haber una forma directa de llegar
-  // al Fan Map sin pasar por /join. Va a /map?view=fans, no a /map (que
-  // caería en Historial), y el nombre accesible "Fan Map" (con espacio) no
-  // matchea el CTA existente "Join the FanMap" (sin espacio).
-  it("renders a working CTA linking to the Fan Map", async () => {
-    await renderPage({ status: "ok", artist: makeArtist(), fans: [] });
-
-    const cta = screen.getByRole("link", { name: /fan map/i });
-    expect(cta).toHaveAttribute("href", "/map?view=fans");
+    expect(screen.queryByRole("link", { name: /historial de shows/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /fan map/i })).not.toBeInTheDocument();
   });
 });

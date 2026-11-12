@@ -17,6 +17,21 @@ const nextConfig: NextConfig = {
   // credentials:"include" (POST /fan-profiles, GET /fan-profiles/me, etc.)
   // tiene que pasar por acá también para poder mandarla — quedarse sólo con
   // /api/auth/* dejaría esas otras rutas sin la cookie igual.
+  // /map ya no tiene vista "Historial" (?view=tour): el historial vive sólo
+  // en /artists/the-warning/tour y se llega desde el header del sitio. Los
+  // links viejos a /map?view=tour se mandan ahí (la query se conserva, así
+  // que los filtros de tour que traían siguen aplicando).
+  async redirects() {
+    return [
+      {
+        source: "/map",
+        has: [{ type: "query", key: "view", value: "tour" }],
+        destination: "/artists/the-warning/tour",
+        permanent: true,
+      },
+    ];
+  },
+
   async rewrites() {
     return [
       {

@@ -24,7 +24,7 @@ export default async function FanProfilePage({ params }: FanProfilePageProps) {
 
   if (data.status === "error") {
     return (
-      <main className="flex h-screen w-full flex-col items-center justify-center gap-4">
+      <main className="flex w-full flex-1 flex-col items-center justify-center gap-4">
         <p>No pudimos cargar este perfil. Intentá de nuevo más tarde.</p>
         <BackToTheWarningLink />
       </main>
@@ -33,7 +33,7 @@ export default async function FanProfilePage({ params }: FanProfilePageProps) {
 
   if (data.status === "not-found") {
     return (
-      <main className="flex h-screen w-full flex-col items-center justify-center gap-4">
+      <main className="flex w-full flex-1 flex-col items-center justify-center gap-4">
         <p>No se encontró este perfil.</p>
         <BackToTheWarningLink />
       </main>
@@ -50,7 +50,7 @@ export default async function FanProfilePage({ params }: FanProfilePageProps) {
   const setlistSongs = [...profile.setlistSongs].sort((a, b) => a.position - b.position);
 
   return (
-    <main className="flex min-h-screen w-full flex-col">
+    <main className="flex w-full flex-1 flex-col">
       <div className="border-b border-zinc-800 px-4 py-2">
         <BackToTheWarningLink />
       </div>

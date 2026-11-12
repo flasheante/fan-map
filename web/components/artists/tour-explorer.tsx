@@ -116,7 +116,7 @@ export function TourExplorer({ artist, shows }: TourExplorerProps) {
 
       <TourStatsSummary stats={stats} />
 
-      <div className="min-h-[60vh] flex-1">
+      <div className="h-[70vh] min-h-80">
         <TourMapLoader cities={mapCities} />
       </div>
 

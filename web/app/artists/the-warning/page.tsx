@@ -1,5 +1,4 @@
 import { Suspense } from "react";
-import { ArtistNav } from "@/components/artists/artist-nav";
 import { ArtistStatsSummary } from "@/components/artists/artist-stats";
 import { TheWarningLogo } from "@/components/artists/the-warning-logo";
 import { TopSongs } from "@/components/artists/top-songs";
@@ -22,12 +21,12 @@ import { getTheWarningTopSongsData } from "@/lib/the-warning-top-songs";
 // que la necesite.
 //
 // Etapa G: el mapa que se ve por defecto acá es el Historial de shows
-// (TourExplorer, el mismo componente que /artists/the-warning/tour y la
-// vista "tour" de /map — nunca una segunda implementación) en vez del Fan
-// Map. `mapData`/`fans` se conservan sólo para el contador, el banner de
-// "sumate" del header y el CTA "Fan Map" (que no dependen de qué mapa se
-// muestra), que lleva directo a /map?view=fans: no hace falta pasar por
-// /join para ver a los demás fans.
+// (TourExplorer, el mismo componente que /artists/the-warning/tour — nunca
+// una segunda implementación) en vez del Fan Map. `mapData`/`fans` se
+// conservan sólo para el contador y el banner de "sumate". La navegación a
+// Historial de shows / Fan Map / Perfil la da el header del sitio
+// (components/site-header.tsx), no esta página.
+//
 // ISR: Vercel sirve el HTML cacheado y lo regenera en background cada 5 min
 // (ver PUBLIC_REVALIDATE_SECONDS en lib/api.ts), así el visitante nunca
 // espera el cold start de la API en Render.
@@ -62,7 +61,7 @@ export default async function TheWarningArtistPage() {
     topSongsData.status === "artist-not-found"
   ) {
     return (
-      <main className="flex h-screen w-full items-center justify-center">
+      <main className="flex w-full flex-1 items-center justify-center">
         <p>No se encontró el artista.</p>
       </main>
     );
@@ -74,7 +73,7 @@ export default async function TheWarningArtistPage() {
   const { topSongs } = topSongsData;
 
   return (
-    <main className="flex h-screen w-full flex-col overflow-y-auto">
+    <main className="flex w-full flex-1 flex-col">
       <header className="flex flex-wrap items-center justify-between gap-4 border-b border-zinc-800 px-4 py-3">
         <div className="flex items-center gap-3">
           {artist.imageUrl && (
@@ -94,7 +93,6 @@ export default async function TheWarningArtistPage() {
             </p>
           </div>
         </div>
-        <ArtistNav />
       </header>
       <ArtistStatsSummary stats={stats} />
       {/* TourExplorer usa useSearchParams(): sin este Suspense, en una página

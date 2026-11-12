@@ -12,7 +12,7 @@ export default function TheWarningError({
   reset: () => void;
 }) {
   return (
-    <main className="flex h-screen w-full flex-col items-center justify-center gap-4">
+    <main className="flex w-full flex-1 flex-col items-center justify-center gap-4">
       <p>No pudimos cargar la página. Intentá de nuevo más tarde.</p>
       <button
         type="button"
