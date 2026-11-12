@@ -2,6 +2,7 @@
 
 import { useEffect, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
+import { revalidateFans } from "@/app/actions/revalidate-fans";
 import {
   createFanProfile,
   getArtists,
@@ -170,6 +171,9 @@ export function FanForm() {
         showOnMap,
         artistIds: selectedArtistIds,
       });
+      // El perfil ya se guardó: si falla la invalidación del cache, el fan
+      // igual aparece en el mapa en ≤5 min, así que no es un error para el usuario.
+      await revalidateFans().catch(() => {});
       setSubmitStatus("success");
     } catch (err) {
       setSubmitError(

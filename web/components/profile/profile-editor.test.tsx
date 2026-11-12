@@ -31,6 +31,12 @@ vi.mock("@/lib/api", () => ({
 
 vi.mock("next/navigation", () => ({ useRouter }));
 
+// Server Action que invalida el cache de fans (ver app/actions/revalidate-fans.ts).
+const { revalidateFans } = vi.hoisted(() => ({
+  revalidateFans: vi.fn().mockResolvedValue(undefined),
+}));
+vi.mock("@/app/actions/revalidate-fans", () => ({ revalidateFans }));
+
 const { ProfileEditor } = await import("./profile-editor");
 
 const mexico: Country = { id: "country-mx", name: "Mexico", code: "MX" };
@@ -251,6 +257,28 @@ describe("ProfileEditor", () => {
     const mapLink = screen.getByRole("link", { name: /ir al mapa/i });
     expect(mapLink).toHaveAttribute("href", "/map?view=fans");
     expect(updateFanProfile).not.toHaveBeenCalled();
+  });
+
+  it("invalidates the cached fan map after a successful save", async () => {
+    revalidateFans.mockClear();
+    const profile = await renderReady();
+    updateFanProfile.mockResolvedValue(profile);
+
+    fireEvent.click(screen.getByRole("button", { name: /^guardar$/i }));
+
+    expect(await screen.findByText(/perfil guardado/i)).toBeInTheDocument();
+    expect(revalidateFans).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not invalidate the cache when saving fails", async () => {
+    revalidateFans.mockClear();
+    await renderReady();
+    updateFanProfile.mockRejectedValue(new Error("nope"));
+
+    fireEvent.click(screen.getByRole("button", { name: /^guardar$/i }));
+
+    expect(await screen.findByRole("alert")).toBeInTheDocument();
+    expect(revalidateFans).not.toHaveBeenCalled();
   });
 
   it("shows an API error message when saving fails", async () => {
