@@ -2,7 +2,7 @@
 // TheWarningShowPage (Server Component async) resuelve getTheWarningShowData().
 export default function Loading() {
   return (
-    <main className="flex h-screen w-full items-center justify-center">
+    <main className="flex w-full flex-1 items-center justify-center">
       <p>Cargando show...</p>
     </main>
   );

@@ -23,7 +23,7 @@ export default function ProfilePage() {
   const { status, user, logout } = useAuth();
 
   return (
-    <main className="flex min-h-screen w-full flex-col">
+    <main className="flex w-full flex-1 flex-col">
       <div className="border-b border-zinc-800 px-4 py-2">
         <BackToTheWarningLink />
       </div>

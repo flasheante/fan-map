@@ -10,5 +10,5 @@
 // en globals.css) se carga en el layout raíz, no acá, porque la landing
 // "/" también la usa.
 export default function TheWarningLayout({ children }: LayoutProps<"/artists/the-warning">) {
-  return <div className="min-h-full bg-black text-white">{children}</div>;
+  return <div className="flex flex-1 flex-col bg-black text-white">{children}</div>;
 }

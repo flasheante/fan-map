@@ -8,5 +8,5 @@
 // MapExplorer): es la única pieza que hace falta repetir, una sola línea de
 // JSX, así que no amerita extraer un componente compartido para evitarla.
 export default function MapLayout({ children }: LayoutProps<"/map">) {
-  return <div className="min-h-full bg-black text-white">{children}</div>;
+  return <div className="flex flex-1 flex-col bg-black text-white">{children}</div>;
 }

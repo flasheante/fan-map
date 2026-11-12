@@ -38,7 +38,7 @@ export default async function TheWarningShowPage({
 
   if (data.status === "artist-not-found") {
     return (
-      <main className="flex h-screen w-full flex-col items-center justify-center gap-4">
+      <main className="flex w-full flex-1 flex-col items-center justify-center gap-4">
         <p>No se encontró el artista.</p>
         <BackToTheWarningLink />
       </main>
@@ -47,7 +47,7 @@ export default async function TheWarningShowPage({
 
   if (data.status === "show-not-found") {
     return (
-      <main className="flex h-screen w-full flex-col items-center justify-center gap-4">
+      <main className="flex w-full flex-1 flex-col items-center justify-center gap-4">
         <p>No se encontró el show.</p>
         <BackToTheWarningLink />
       </main>
@@ -57,7 +57,7 @@ export default async function TheWarningShowPage({
   const { artist, show, setlist } = data;
 
   return (
-    <main className="flex min-h-screen w-full flex-col">
+    <main className="flex w-full flex-1 flex-col">
       <ShowDetail artist={artist} show={show} />
       <section>
         <h2 className="font-warning px-4 pt-3 text-sm font-bold uppercase tracking-wide text-zinc-400">

@@ -38,7 +38,7 @@ export default async function TheWarningTourCityPage({
 
   if (data.status === "artist-not-found") {
     return (
-      <main className="flex h-screen w-full flex-col items-center justify-center gap-4">
+      <main className="flex w-full flex-1 flex-col items-center justify-center gap-4">
         <p>No se encontró el artista.</p>
         <BackToTourMapLink />
       </main>
@@ -47,7 +47,7 @@ export default async function TheWarningTourCityPage({
 
   if (data.status === "city-not-found") {
     return (
-      <main className="flex h-screen w-full flex-col items-center justify-center gap-4">
+      <main className="flex w-full flex-1 flex-col items-center justify-center gap-4">
         <p>No se encontró la ciudad.</p>
         <BackToTourMapLink />
       </main>
@@ -57,7 +57,7 @@ export default async function TheWarningTourCityPage({
   const { artist, city, shows } = data;
 
   return (
-    <main className="flex min-h-screen w-full flex-col">
+    <main className="flex w-full flex-1 flex-col">
       <TourCityHistory artist={artist} city={city} shows={shows} />
     </main>
   );

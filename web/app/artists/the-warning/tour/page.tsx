@@ -30,7 +30,7 @@ export default async function TourMapPage() {
 
   if (data.status === "artist-not-found") {
     return (
-      <main className="flex h-screen w-full flex-col items-center justify-center gap-4">
+      <main className="flex w-full flex-1 flex-col items-center justify-center gap-4">
         <p>No se encontró el artista.</p>
         <BackToTheWarningLink />
       </main>
@@ -40,7 +40,7 @@ export default async function TourMapPage() {
   const { artist, shows } = data;
 
   return (
-    <main className="flex h-screen w-full flex-col overflow-y-auto">
+    <main className="flex w-full flex-1 flex-col">
       <div className="border-b border-zinc-800 px-4 py-2">
         <TourBreadcrumbs level="tour" artistName={artist.name} />
       </div>
