@@ -17,7 +17,10 @@
 //   via Intl.DisplayNames (same language as the tour countries in seed.ts).
 // - Per country, every city with >= MIN_POPULATION inhabitants, plus the
 //   MIN_CITIES_PER_COUNTRY most populous ones so small countries aren't
-//   left empty.
+//   left empty, plus the most populous city of each region (admin1) so no
+//   province/state is missing from the region picker (e.g. Santa Cruz,
+//   Argentina, whose biggest city is under MIN_POPULATION). Regions with no
+//   city in cities15000.txt at all still end up empty.
 // - City names keep GeoNames' `name` column (e.g. 'Mexico City'), which
 //   matches setlist.fm's spelling for most cities.
 // - Sections of populated places (PPLX, e.g. city districts), Paris
@@ -67,6 +70,10 @@ const REGION_NAME_OVERRIDES: Record<string, string> = {
   'BY.05': 'Minsk (provincia)',
   'RU.48': 'Moscú (ciudad)',
   'RU.47': 'Óblast de Moscú',
+  'HR.21': 'Zagreb (ciudad)',
+  'HR.20': 'Condado de Zagreb',
+  'LA.24': 'Vientián (prefectura)',
+  'LA.27': 'Vientián (provincia)',
 };
 
 type WorldRegion = { code: string; name: string };
@@ -188,10 +195,17 @@ for (const line of readFileSync(
 
 async function main() {
   const spanishRegionNames = await loadSpanishRegionNames();
+  // Collected across all countries so a regeneration reports every clash
+  // at once instead of one per run.
+  const repeatedRegions: string[] = [];
 
   const countries: WorldCountry[] = countryCodes
     .map((code) => {
       const seen = new Set<string>();
+      const knownRegionCodes = new Set(
+        (regionsByCountry.get(code) ?? []).map((region) => region.code),
+      );
+      const coveredRegions = new Set<string>();
       const cities = (candidatesByCountry.get(code) ?? [])
         .sort((a, b) => b.population - a.population)
         .filter((city) => {
@@ -199,10 +213,20 @@ async function main() {
           seen.add(city.name);
           return true;
         })
-        .filter(
-          (city, index) =>
-            city.population >= MIN_POPULATION || index < MIN_CITIES_PER_COUNTRY,
-        )
+        .filter((city, index) => {
+          // Sorted by population, so the first city seen in a region is its
+          // most populous one.
+          const firstInRegion =
+            city.region !== undefined &&
+            knownRegionCodes.has(city.region) &&
+            !coveredRegions.has(city.region);
+          if (city.region) coveredRegions.add(city.region);
+          return (
+            city.population >= MIN_POPULATION ||
+            index < MIN_CITIES_PER_COUNTRY ||
+            firstInRegion
+          );
+        })
         .map(({ name, latitude, longitude, region }) => ({
           name,
           latitude,
@@ -235,14 +259,13 @@ async function main() {
         city.region = nearest?.other.region;
       }
 
-      const usedNames = regions
-        .filter((r) => cities.some((city) => city.region === r.code))
-        .map((r) => r.name);
-      const repeated = usedNames.filter((n, i) => usedNames.indexOf(n) !== i);
-      if (repeated.length > 0) {
-        throw new Error(
-          `Repeated region names in ${code}: ${repeated.join(', ')} — add them to REGION_NAME_OVERRIDES`,
-        );
+      const usedRegions = regions.filter((r) =>
+        cities.some((city) => city.region === r.code),
+      );
+      for (const region of usedRegions) {
+        if (usedRegions.some((r) => r !== region && r.name === region.name)) {
+          repeatedRegions.push(`${code}.${region.code} (${region.name})`);
+        }
       }
 
       return {
@@ -256,6 +279,12 @@ async function main() {
     // fan could pick, so they'd only be dead ends in the country dropdown.
     .filter((country) => country.cities.length > 0)
     .sort((a, b) => a.name.localeCompare(b.name, 'es'));
+
+  if (repeatedRegions.length > 0) {
+    throw new Error(
+      `Repeated region names — add them to REGION_NAME_OVERRIDES:\n  ${repeatedRegions.join('\n  ')}`,
+    );
+  }
 
   const outDir = join(__dirname, '..', 'prisma', 'data');
   mkdirSync(outDir, { recursive: true });
