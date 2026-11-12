@@ -32,6 +32,12 @@ const SESSION_API_URL = "/api";
 // opción `next` se ignora, así que esos llamados no cambian.
 export const PUBLIC_REVALIDATE_SECONDS = 300;
 
+// Tag de los fetches que dependen de los fans (GET /artists/:id/fans y
+// /stats, que cuenta fans/países/ciudades). app/actions/revalidate-fans.ts lo
+// invalida al crear o editar un perfil, para que el fan aparezca en el mapa
+// y en el contador al instante en vez de esperar el revalidate de 5 min.
+export const FANS_CACHE_TAG = "fans";
+
 export interface Country {
   id: string;
   name: string;
@@ -519,7 +525,7 @@ export async function getArtistFans(
   artistId: string,
 ): Promise<ArtistFansResponse> {
   const res = await fetch(`${API_URL}/artists/${artistId}/fans?onMap=true`, {
-    next: { revalidate: PUBLIC_REVALIDATE_SECONDS },
+    next: { revalidate: PUBLIC_REVALIDATE_SECONDS, tags: [FANS_CACHE_TAG] },
   });
 
   if (!res.ok) {
@@ -543,7 +549,7 @@ export async function getArtistShows(artistId: string): Promise<ArtistShow[]> {
 
 export async function getArtistStats(artistId: string): Promise<ArtistStats> {
   const res = await fetch(`${API_URL}/artists/${artistId}/stats`, {
-    next: { revalidate: PUBLIC_REVALIDATE_SECONDS },
+    next: { revalidate: PUBLIC_REVALIDATE_SECONDS, tags: [FANS_CACHE_TAG] },
   });
 
   if (!res.ok) {

@@ -88,7 +88,7 @@ describe("getArtistFans", () => {
 
     expect(fetchMock).toHaveBeenCalledWith(
       expect.stringMatching(/\/artists\/artist-1\/fans\?onMap=true$/),
-      expect.objectContaining({ next: { revalidate: 300 } }),
+      expect.objectContaining({ next: { revalidate: 300, tags: ["fans"] } }),
     );
     expect(result).toEqual(body);
   });
@@ -157,7 +157,7 @@ describe("getArtistStats", () => {
 
     expect(fetchMock).toHaveBeenCalledWith(
       expect.stringMatching(/\/artists\/artist-1\/stats$/),
-      expect.objectContaining({ next: { revalidate: 300 } }),
+      expect.objectContaining({ next: { revalidate: 300, tags: ["fans"] } }),
     );
     expect(result).toEqual(stats);
   });

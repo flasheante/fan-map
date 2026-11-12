@@ -21,6 +21,12 @@ vi.mock("@/lib/api", () => ({
 
 vi.mock("next/navigation", () => ({ useRouter }));
 
+// Server Action que invalida el cache de fans (ver app/actions/revalidate-fans.ts).
+const { revalidateFans } = vi.hoisted(() => ({
+  revalidateFans: vi.fn().mockResolvedValue(undefined),
+}));
+vi.mock("@/app/actions/revalidate-fans", () => ({ revalidateFans }));
+
 const { FanForm } = await import("./fan-form");
 
 const mexico: Country = { id: "country-mx", name: "Mexico", code: "MX" };
@@ -307,6 +313,43 @@ describe("FanForm", () => {
     const [payload] = createFanProfile.mock.calls[0] as [Record<string, unknown>];
     expect(payload).not.toHaveProperty("email");
     expect(payload).not.toHaveProperty("userId");
+  });
+
+  it("invalidates the cached fan map after a successful POST so the new fan shows up right away", async () => {
+    revalidateFans.mockClear();
+    createFanProfile.mockResolvedValue({ id: "profile-1" });
+
+    await renderReadyForm();
+    fillValidForm();
+    await selectCountryAndCity(mexico.id, monterrey.id);
+    fireEvent.click(screen.getByRole("button", { name: /crear perfil/i }));
+
+    await waitFor(() => expect(revalidateFans).toHaveBeenCalledTimes(1));
+  });
+
+  it("still shows success when invalidating the cache fails (the profile was already saved)", async () => {
+    revalidateFans.mockRejectedValueOnce(new Error("boom"));
+    createFanProfile.mockResolvedValue({ id: "profile-1" });
+
+    await renderReadyForm();
+    fillValidForm();
+    await selectCountryAndCity(mexico.id, monterrey.id);
+    fireEvent.click(screen.getByRole("button", { name: /crear perfil/i }));
+
+    expect(await screen.findByText(/tu perfil se creó correctamente/i)).toBeInTheDocument();
+  });
+
+  it("does not invalidate the cache when the POST fails", async () => {
+    revalidateFans.mockClear();
+    createFanProfile.mockRejectedValue(new Error("nope"));
+
+    await renderReadyForm();
+    fillValidForm();
+    await selectCountryAndCity();
+    fireEvent.click(screen.getByRole("button", { name: /crear perfil/i }));
+
+    expect(await screen.findByText(/no pudimos crear tu perfil/i)).toBeInTheDocument();
+    expect(revalidateFans).not.toHaveBeenCalled();
   });
 
   it("shows a loading state while the POST is in flight", async () => {

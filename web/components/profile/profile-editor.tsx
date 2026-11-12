@@ -3,6 +3,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { revalidateFans } from "@/app/actions/revalidate-fans";
 import {
   getArtists,
   getArtistSongs,
@@ -249,6 +250,9 @@ export function ProfileEditor() {
         facebookUrl: social.facebookUrl,
         facebookIsPublic: social.facebookIsPublic,
       });
+      // El perfil ya se guardó: si falla la invalidación del cache, el fan
+      // igual aparece en el mapa en ≤5 min, así que no es un error para el usuario.
+      await revalidateFans().catch(() => {});
       applyProfile(updated, countries);
       setSaveStatus("success");
     } catch (err) {
