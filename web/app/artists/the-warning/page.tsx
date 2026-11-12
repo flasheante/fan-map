@@ -1,8 +1,10 @@
+import { Suspense } from "react";
 import { ArtistNav } from "@/components/artists/artist-nav";
 import { ArtistStatsSummary } from "@/components/artists/artist-stats";
 import { TheWarningLogo } from "@/components/artists/the-warning-logo";
 import { TopSongs } from "@/components/artists/top-songs";
 import { TourExplorer } from "@/components/artists/tour-explorer";
+import { TourExplorerFallback } from "@/components/artists/tour-explorer-fallback";
 import { getArtists } from "@/lib/api";
 import { getTheWarningMapData } from "@/lib/the-warning-fan-map";
 import { getTheWarningShowsData } from "@/lib/the-warning-shows";
@@ -26,20 +28,16 @@ import { getTheWarningTopSongsData } from "@/lib/the-warning-top-songs";
 // "sumate" del header y el CTA "Fan Map" (que no dependen de qué mapa se
 // muestra), que lleva directo a /map?view=fans: no hace falta pasar por
 // /join para ver a los demás fans.
+// ISR: Vercel sirve el HTML cacheado y lo regenera en background cada 5 min
+// (ver PUBLIC_REVALIDATE_SECONDS en lib/api.ts), así el visitante nunca
+// espera el cold start de la API en Render.
+export const revalidate = 300;
+
 export default async function TheWarningArtistPage() {
-  let artists;
-  try {
-    artists = await getArtists();
-  } catch {
-    return (
-      <main className="flex h-screen w-full items-center justify-center">
-        <p>
-          No pudimos cargar la página del artista. Intentá de nuevo más
-          tarde.
-        </p>
-      </main>
-    );
-  }
+  // Lanzar (en vez de devolver un mensaje) para que ISR no cachee la página
+  // de error: si falla una regeneración, Next sigue sirviendo la última
+  // versión buena; si falla la primera, se ve app/artists/the-warning/error.tsx.
+  const artists = await getArtists();
 
   const [mapData, showsData, statsData, topSongsData] = await Promise.all([
     getTheWarningMapData(artists),
@@ -54,14 +52,7 @@ export default async function TheWarningArtistPage() {
     statsData.status === "error" ||
     topSongsData.status === "error"
   ) {
-    return (
-      <main className="flex h-screen w-full items-center justify-center">
-        <p>
-          No pudimos cargar la página del artista. Intentá de nuevo más
-          tarde.
-        </p>
-      </main>
-    );
+    throw new Error("No pudimos cargar la página de The Warning");
   }
 
   if (
@@ -106,7 +97,11 @@ export default async function TheWarningArtistPage() {
         <ArtistNav />
       </header>
       <ArtistStatsSummary stats={stats} />
-      <TourExplorer artist={artist} shows={shows} />
+      {/* TourExplorer usa useSearchParams(): sin este Suspense, en una página
+          estática todo hasta loading.tsx se renderizaría sólo en el cliente. */}
+      <Suspense fallback={<TourExplorerFallback />}>
+        <TourExplorer artist={artist} shows={shows} />
+      </Suspense>
       {fans.length === 0 && (
         <p className="border-t border-zinc-800 px-4 py-3 text-center text-sm text-zinc-400">
           Todavía no hay fans de {artist.name} en el mapa. ¡Sumate y sé el

@@ -89,21 +89,10 @@ describe("TheWarningShowPage", () => {
     expect(getTheWarningShowData).toHaveBeenCalledWith("show-1");
   });
 
-  it("shows an error message when the data could not be loaded", async () => {
-    await renderPage("show-1", { status: "error" });
-
-    expect(
-      screen.getByText(/no pudimos cargar el show/i),
-    ).toBeInTheDocument();
-    expect(screen.queryByTestId("show-detail")).not.toBeInTheDocument();
-  });
-
-  it("offers a way back to the artist page when the data could not be loaded", async () => {
-    await renderPage("show-1", { status: "error" });
-
-    expect(
-      screen.getByRole("link", { name: /volver a the warning/i }),
-    ).toHaveAttribute("href", "/artists/the-warning");
+  it("throws (so ISR keeps serving the last good page) when the data could not be loaded", async () => {
+    await expect(renderPage("show-1", { status: "error" })).rejects.toThrow(
+      /no pudimos cargar el show/i,
+    );
   });
 
   it("shows a not-found state when The Warning doesn't exist", async () => {

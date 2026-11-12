@@ -12,19 +12,28 @@ interface TheWarningShowPageProps {
 // GET /artists, buscar "the-warning" por slug (sin hardcodear su UUID) y
 // luego, con el showId de la URL, GET /artists/:artistId/shows/:showId y
 // GET /artists/:artistId/shows/:showId/setlist en paralelo.
+// ISR: Vercel sirve el HTML cacheado y lo regenera en background cada 5 min
+// (ver PUBLIC_REVALIDATE_SECONDS en lib/api.ts), así el visitante nunca
+// espera el cold start de la API en Render.
+export const revalidate = 300;
+
+// Sin params prerenderizados en el build: cada ciudad/show se genera en su
+// primera visita y queda cacheado (ISR on-demand).
+export async function generateStaticParams() {
+  return [];
+}
+
 export default async function TheWarningShowPage({
   params,
 }: TheWarningShowPageProps) {
   const { showId } = await params;
   const data = await getTheWarningShowData(showId);
 
+  // Lanzar (en vez de devolver un mensaje) para que ISR no cachee la página
+  // de error: si falla una regeneración, Next sigue sirviendo la última
+  // versión buena; si falla la primera, se ve app/artists/the-warning/error.tsx.
   if (data.status === "error") {
-    return (
-      <main className="flex h-screen w-full flex-col items-center justify-center gap-4">
-        <p>No pudimos cargar el show. Intentá de nuevo más tarde.</p>
-        <BackToTheWarningLink />
-      </main>
-    );
+    throw new Error("No pudimos cargar el show");
   }
 
   if (data.status === "artist-not-found") {

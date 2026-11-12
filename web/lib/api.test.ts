@@ -51,7 +51,7 @@ describe("getArtists", () => {
 
     expect(fetchMock).toHaveBeenCalledWith(
       expect.stringMatching(/\/artists$/),
-      expect.objectContaining({ cache: "no-store" }),
+      expect.objectContaining({ next: { revalidate: 300 } }),
     );
     expect(result).toEqual(artists);
   });
@@ -88,7 +88,7 @@ describe("getArtistFans", () => {
 
     expect(fetchMock).toHaveBeenCalledWith(
       expect.stringMatching(/\/artists\/artist-1\/fans\?onMap=true$/),
-      expect.objectContaining({ cache: "no-store" }),
+      expect.objectContaining({ next: { revalidate: 300 } }),
     );
     expect(result).toEqual(body);
   });
@@ -130,7 +130,7 @@ describe("getArtistShows", () => {
 
     expect(fetchMock).toHaveBeenCalledWith(
       expect.stringMatching(/\/artists\/artist-1\/shows$/),
-      expect.objectContaining({ cache: "no-store" }),
+      expect.objectContaining({ next: { revalidate: 300 } }),
     );
     expect(result).toEqual(shows);
   });
@@ -157,7 +157,7 @@ describe("getArtistStats", () => {
 
     expect(fetchMock).toHaveBeenCalledWith(
       expect.stringMatching(/\/artists\/artist-1\/stats$/),
-      expect.objectContaining({ cache: "no-store" }),
+      expect.objectContaining({ next: { revalidate: 300 } }),
     );
     expect(result).toEqual(stats);
   });
@@ -187,7 +187,7 @@ describe("getArtistTopSongs", () => {
 
     expect(fetchMock).toHaveBeenCalledWith(
       expect.stringMatching(/\/artists\/artist-1\/stats\/songs$/),
-      expect.objectContaining({ cache: "no-store" }),
+      expect.objectContaining({ next: { revalidate: 300 } }),
     );
     expect(result).toEqual(topSongs);
   });
@@ -227,7 +227,7 @@ describe("getArtistShow", () => {
 
     expect(fetchMock).toHaveBeenCalledWith(
       expect.stringMatching(/\/artists\/artist-1\/shows\/show-1$/),
-      expect.objectContaining({ cache: "no-store" }),
+      expect.objectContaining({ next: { revalidate: 300 } }),
     );
     expect(result).toEqual(show);
   });
@@ -265,7 +265,7 @@ describe("getShowSetlist", () => {
 
     expect(fetchMock).toHaveBeenCalledWith(
       expect.stringMatching(/\/artists\/artist-1\/shows\/show-1\/setlist$/),
-      expect.objectContaining({ cache: "no-store" }),
+      expect.objectContaining({ next: { revalidate: 300 } }),
     );
     expect(result).toEqual(setlist);
   });

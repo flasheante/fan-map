@@ -249,74 +249,50 @@ describe("TheWarningArtistPage", () => {
     ]);
   });
 
-  it("shows an error message when GET /artists fails, without calling getTheWarningMapData, getTheWarningShowsData, getTheWarningStatsData or getTheWarningTopSongsData", async () => {
+  it("throws (so ISR keeps serving the last good page) when GET /artists fails, without calling getTheWarningMapData, getTheWarningShowsData, getTheWarningStatsData or getTheWarningTopSongsData", async () => {
     getArtists.mockRejectedValue(new Error("network error"));
 
-    render(await TheWarningArtistPage());
-
-    expect(
-      screen.getByText(/no pudimos cargar la página del artista/i),
-    ).toBeInTheDocument();
+    await expect(TheWarningArtistPage()).rejects.toThrow("network error");
     expect(getTheWarningMapData).not.toHaveBeenCalled();
     expect(getTheWarningShowsData).not.toHaveBeenCalled();
     expect(getTheWarningStatsData).not.toHaveBeenCalled();
     expect(getTheWarningTopSongsData).not.toHaveBeenCalled();
   });
 
-  it("shows an error message when the map data could not be loaded", async () => {
-    await renderPage({ status: "error" });
-
-    expect(
-      screen.getByText(/no pudimos cargar la página del artista/i),
-    ).toBeInTheDocument();
-    expect(screen.queryByTestId("tour-explorer")).not.toBeInTheDocument();
-    expect(screen.queryByTestId("artist-stats-summary")).not.toBeInTheDocument();
-    expect(screen.queryByTestId("top-songs")).not.toBeInTheDocument();
+  it("throws when the map data could not be loaded", async () => {
+    await expect(renderPage({ status: "error" })).rejects.toThrow(
+      /no pudimos cargar la página de the warning/i,
+    );
   });
 
-  it("shows an error message when the shows data could not be loaded", async () => {
-    await renderPage(
+  it("throws when the shows data could not be loaded", async () => {
+    await expect(renderPage(
       { status: "ok", artist: makeArtist(), fans: [] },
       { status: "error" },
+    )).rejects.toThrow(
+      /no pudimos cargar la página de the warning/i,
     );
-
-    expect(
-      screen.getByText(/no pudimos cargar la página del artista/i),
-    ).toBeInTheDocument();
-    expect(screen.queryByTestId("tour-explorer")).not.toBeInTheDocument();
-    expect(screen.queryByTestId("artist-stats-summary")).not.toBeInTheDocument();
-    expect(screen.queryByTestId("top-songs")).not.toBeInTheDocument();
   });
 
-  it("shows an error message when the stats data could not be loaded", async () => {
-    await renderPage(
+  it("throws when the stats data could not be loaded", async () => {
+    await expect(renderPage(
       { status: "ok", artist: makeArtist(), fans: [] },
       defaultShowsData,
       { status: "error" },
+    )).rejects.toThrow(
+      /no pudimos cargar la página de the warning/i,
     );
-
-    expect(
-      screen.getByText(/no pudimos cargar la página del artista/i),
-    ).toBeInTheDocument();
-    expect(screen.queryByTestId("tour-explorer")).not.toBeInTheDocument();
-    expect(screen.queryByTestId("artist-stats-summary")).not.toBeInTheDocument();
-    expect(screen.queryByTestId("top-songs")).not.toBeInTheDocument();
   });
 
-  it("shows an error message when the top songs data could not be loaded", async () => {
-    await renderPage(
+  it("throws when the top songs data could not be loaded", async () => {
+    await expect(renderPage(
       { status: "ok", artist: makeArtist(), fans: [] },
       defaultShowsData,
       defaultStatsData,
       { status: "error" },
+    )).rejects.toThrow(
+      /no pudimos cargar la página de the warning/i,
     );
-
-    expect(
-      screen.getByText(/no pudimos cargar la página del artista/i),
-    ).toBeInTheDocument();
-    expect(screen.queryByTestId("tour-explorer")).not.toBeInTheDocument();
-    expect(screen.queryByTestId("artist-stats-summary")).not.toBeInTheDocument();
-    expect(screen.queryByTestId("top-songs")).not.toBeInTheDocument();
   });
 
   it("shows a not-found state when The Warning doesn't exist", async () => {
